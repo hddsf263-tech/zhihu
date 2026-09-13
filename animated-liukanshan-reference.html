@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>动态刘看山 · UI 参考稿</title>
+  <style>
+    :root { --paper:#fff4dc; --wood:#805335; --brick:#b9573e; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:#b9d9d2; }
+    body { display:grid; place-items:center; overflow:hidden; }
+    .map { position:relative; width:min(100vw,160vh); aspect-ratio:16/10; }
+    .map > img.base { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:contain; }
+    /* 覆盖原图中的静态刘看山：只重建同尺寸的奶油色圆牌，不改变其他像素。 */
+    .guide-mask { position:absolute; z-index:2; left:48.55%; top:21.65%; width:11.05%; aspect-ratio:1; border-radius:50%; background:var(--paper); border:clamp(5px,.62vw,9px) solid var(--wood); box-shadow:0 8px 0 #4a342455; }
+    .guide-gif { position:absolute; z-index:3; left:50.05%; top:25.9%; width:8.2%; height:10.4%; object-fit:contain; pointer-events:none; }
+    .hotspot { position:absolute; z-index:4; border:0; background:transparent; cursor:pointer; }
+    .hotspot:focus-visible { outline:4px solid #f4d66f; outline-offset:4px; }
+    .guide-hit { left:47%; top:20%; width:15%; height:25%; border-radius:50%; }
+    .note { position:absolute; z-index:5; left:1.5%; bottom:1.5%; padding:8px 12px; color:#2f6855; background:#fff4dcdd; border:2px solid #805335; font:700 clamp(10px,1.2vw,16px)/1.3 "Microsoft YaHei",sans-serif; }
+    @media (max-aspect-ratio:8/5) { .map { width:100vw; } }
+    @media (prefers-reduced-motion:reduce) { .guide-gif { visibility:hidden; } }
+  </style>
+</head>
+<body>
+  <main class="map" aria-label="动态刘看山 UI 参考稿">
+    <img class="base" src="/assets/approved-map-ui.png" alt="批准版像素地图底图" />
+    <span class="guide-mask" aria-hidden="true"></span>
+    <img class="guide-gif" src="/assets/liukanshan-guide.gif" alt="动态刘看山向导" />
+    <button class="hotspot guide-hit" aria-label="刘看山向导，可点击测试"><span hidden>刘看山向导</span></button>
+    <div class="note">动态刘看山试用参考 · 原静态区域已覆盖</div>
+  </main>
+</body>
+</html>
