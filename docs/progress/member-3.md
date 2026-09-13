@@ -1,33 +1,25 @@
 # 成员三进度
 
-日期：2026-09-13
-分支：feat/member-3-m3-ui
-基线：feat/member-2-m2-baseline-clean @ d156856
+更新：2026-09-13
+分支：feat/member-3-m3-api-integration
+父基线：ae5b8dd（M3） + b88d9d0（M2 安全加固）
 
-## 已完成
+## 已验证
 
-- [x] 读取成员二交接、contracts 和 replay fixtures。
-- [x] 使用现有 `@experience-map/contracts` 类型和 fixtures，未复制 schema。
-- [x] 实现首页 `/`：主题/问题链接入口、可选条件、主案例填充和校验。
-- [x] 实现任务页 `/jobs/:jobId`：四阶段状态展示、轮询、成功/失败态。
-- [x] 实现地图页 `/maps/:mapId`：条件摘要、路线卡片、路线切换、阶段任务、风险和来源。
-- [x] 实现来源抽屉：摘要、引用片段、缺失作者占位、知乎原文安全跳转、Esc 关闭。
-- [x] 实现行动清单 `/maps/:mapId/plan`：任务勾选、本机 localStorage 保存、进度条和 Markdown 导出。
-- [x] 实现响应式布局和基础键盘焦点样式。
-- [x] 本地验证 `pnpm install`、`pnpm --filter @experience-map/web lint`、`pnpm --filter @experience-map/web test`、`pnpm --filter @experience-map/web build` 通过。
-- [x] 已提交前端改动：`0113cec feat(web): build replay experience map flow`。
+- 已修复旧前端漏掉 createRoot 挂载造成的空白页；旧占位测试不能视为页面可用证据。
+- 四条路由已通过同源 HTTP /api/v1 接通本地后端 replay。
+- 使用共享 contracts 与 fixture，没有复制 schema 或修改后端 DTO。
+- 表单校验、幂等键、防重复提交、任务终态停止、95 秒边界、空路线、无效 routeId 均有验证。
+- 路线对比、来源抽屉焦点/高亮、合成地址禁跳、本机清单保存及 Markdown 导出通过实际浏览器流程。
+- pnpm test：24 项；pnpm lint / contracts:check / build 均通过。
+- Playwright Edge E2E：16 项通过；360/390/768/1440 宽度无横向溢出。
+- 合成 fixture、真实 HTTP 回放、受控 live 响应测试的边界已明确；没有调用真实知乎或读取 Secret。
 
-## 当前限制
+## 待团队完成
 
-- [ ] 尚未完成真实 API client；当前为 replay Mock 闭环。
-- [ ] 尚未运行 Playwright（基线暂无有效 E2E 配置）。
-- [ ] 尚未完成 live/replay/error 六种后端状态联调。
-- [ ] GitHub 推送因网络连接重置尚未得到远端确认；本地 commit 可直接 push。
-- [ ] `docs/decisions/` 中 packages 目录差异 ADR 待项目负责人统一记录。
+- 真实 Provider 的请求协议需按官方文档修正；DeterministicModelAdapter 还不是模型多路线生成。
+- SQLite 持久化、全任务超时、真正并发/缓存、生产静态托管/Docker/HTTPS 尚待成员二。
+- DataStatus 无 cache 枚举；未来缓存元信息需契约协商，不在前端私加。
+- 更换成真实内容后，成员一人工审核证据与路线；最终视觉和演示视频后续完成。
 
-## 下一步
-
-1. 确认 `0113cec` 已推送到 GitHub，通知成员一和成员二审阅。
-2. 等成员二完成 M2-2～M2-5 后接入 `/api/v1`，保留 `VITE_DATA_MODE=mock|live|replay`。
-3. 补充有意义的前端测试：提交防重复、来源抽屉、路线切换、localStorage、导出和错误态。
-4. 完成 360/390/768/1440px 截图、键盘检查和 Playwright smoke。
+完整交接与运行方式：[member-3-integration-handoff.md](../reviews/member-3-integration-handoff.md)。
