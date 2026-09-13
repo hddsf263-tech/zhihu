@@ -14,19 +14,21 @@
 - M2-5 安全补强已完成：服务端脱敏函数对任何密钥值统一返回 `[REDACTED]`，不再保留首尾字符，并增加配置安全单测。
 - M2-4 SQLite 持久化闭环已完成：任务、地图、幂等键/响应写入数据库，启动自动迁移，并以数据库重开测试和完整 API 进程重启后的 HTTP 读取验证恢复；`maxConcurrent` 已接入任务队列并验证并发上限。
 - 三个 API 接口和 live、replay、empty、rate-limit（HTTP 429 与业务码 30001）、timeout、invalid-map 六种状态已使用本地模拟上游执行接口测试。
+- M2-2 官方协议修正已完成：知乎搜索与问题回答改用 `https://developer.zhihu.com` 的 GET 接口，解析 `Code/Data/Items`、`ContentText/Summary` 等真实字段；生产模型接入 `/v1/chat/completions`，并保留来源证据校验。
+- 官方 CLI 最小真实验证通过：知乎搜索、问题回答摘要、知乎直答各成功调用 1 次；调用前对应剩余额度为 10、10、2，调用后为 9、9、1。
 
 ## M2 本地验收证据（2026-09-13）
 
 - `pnpm install`：通过；pnpm 11.19.0，提示 `pnpm.onlyBuiltDependencies` 配置将被忽略。
 - `pnpm lint`：通过；contracts、api、web TypeScript 检查通过。
-- `pnpm test`：通过；contracts 3 项、api 23 项、web 1 项，共 27 项。
+- `pnpm test`：通过；contracts 3 项、api 28 项、web 1 项，共 32 项。
 - `pnpm build`：通过；contracts、api、web 构建成功。
 - `pnpm contracts:check`：通过。
 - `pnpm health`：通过；API 返回 `ok: true`。
 
 ## 未核验与风险
 
-- 真实知乎 API、Access Secret、额度和线上部署尚未完成 live 联调；没有把它们标成已完成。
+- 知乎官方 CLI 的搜索、问题回答和直答最小调用已通过；项目 API 进程尚未注入系统凭据完成端到端 live 联调，仍标为未验证。
 - SQLite 关闭后重开恢复已在本地临时数据库验证通过；Docker 公网部署与 HTTPS、Playwright E2E 尚未完成验收。
 - `packages/api` 中 M2-2～M2-5 的代码已通过本地静态/单元验证，但不等同于真实上游和生产环境验收。
 - 此前 `pnpm approve-builds esbuild` 曾受交互/安全策略影响；本轮 `pnpm install` 已成功完成。

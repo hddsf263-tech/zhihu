@@ -6,13 +6,13 @@ import { CreateMapJobRequestSchema, ErrorResponseSchema } from '@experience-map/
 import { JobManager } from './job-manager.js';
 import { MemoryJobStore, SqliteJobStore, type JobStore } from './job-store.js';
 import { ZhihuHttpClient, type ZhihuClient } from './providers.js';
-import { DeterministicModelAdapter, type ModelAdapter } from './pipeline.js';
+import { DeterministicModelAdapter, ZhidaHttpModelAdapter, type ModelAdapter } from './pipeline.js';
 
 export function createApp(options: { store?: JobStore; client?: ZhihuClient; model?: ModelAdapter } = {}) {
   const app = express();
   const manager = new JobManager(
     options.client ?? new ZhihuHttpClient(),
-    options.model ?? new DeterministicModelAdapter(),
+    options.model ?? (process.env.NODE_ENV === 'test' ? new DeterministicModelAdapter() : new ZhidaHttpModelAdapter()),
     options.store ?? new MemoryJobStore()
   );
   app.use(cors());
