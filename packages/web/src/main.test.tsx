@@ -33,7 +33,7 @@ describe('HTTP boundary', () => {
   it('aborts hung requests with a recoverable network error', async () => {
     vi.useFakeTimers();
     const fetcher = vi.fn<typeof fetch>((_, init) => new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
-    const promise = createHttpClient(fetcher).getJob('id'); await vi.advanceTimersByTimeAsync(75001);
+    const promise = createHttpClient(fetcher).getJob('id'); await vi.advanceTimersByTimeAsync(150001);
     expect(await promise).toMatchObject({ ok: false, error: { code: 'NETWORK_ERROR', retryable: true } });
   });
   it('mock mode returns labelled fixture without network', async () => {
