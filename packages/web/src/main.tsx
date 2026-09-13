@@ -13,7 +13,7 @@ function Home() {
   const navigate = useNavigate();
   return <main className="approved-page">
     <div className="approved-map">
-      <img className="approved-art" src="/assets/approved-map-ui.png" alt="知乎像素经验地图：作品村、投递码头、技能森林和刘看山向导" />`r`n      <img className="guide-gif" src="/assets/liukanshan-guide.gif" alt="刘看山动态向导" />
+      <img className="approved-art" src="/assets/approved-map-ui-clean.png" alt="知乎像素经验地图：作品村、投递码头、技能森林和刘看山向导" />`r`n      <span className="guide-clear" aria-hidden="true"></span>`r`n      <img className="guide-gif" src="/assets/liukanshan-guide.gif" alt="刘看山动态向导" />
       <nav className="approved-hotspots" aria-label="经验地图地点">
         {places.map(place => <Link key={place.id} className={`hotspot ${place.className}`} to={`/jobs/job_replay_pm_intern?route=${place.id}`} aria-label={`${place.title}：${place.subtitle}`}><span className="sr-only">{place.title}：{place.subtitle}</span></Link>)}
         <button className="hotspot guide-hotspot" aria-label="小山：路线提示"><span className="sr-only">小山：先走一条你能坚持的路</span></button>
