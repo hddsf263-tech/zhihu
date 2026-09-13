@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { replayMap } from '@experience-map/contracts/fixtures';
 import { DeterministicModelAdapter, validateModelOutput, ZhidaHttpModelAdapter } from './pipeline.js';
 
 const constraints = { background: null, weeks: null, hoursPerWeek: null, budgetCny: null };
@@ -23,17 +22,25 @@ describe('pipeline validation', () => {
     vi.stubEnv('ZHIHU_ACCESS_SECRET', 'test-secret-not-real');
     let calledUrl = '';
     let requestBody: { model?: string; stream?: boolean; messages?: unknown[] } = {};
+    const modelMap = await new DeterministicModelAdapter().organize({ query: '测试', inputMode: 'topic', questionUrl: null, constraints, sources: singleSource });
+    const { overview, routes, differences, evidence, limitations } = modelMap;
+    const analysis = { overview, routes, differences, evidence, limitations };
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       calledUrl = input.toString();
       requestBody = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(replayMap) } }] }), { status: 200 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(analysis) } }] }), { status: 200 });
     }));
     try {
       const raw = await new ZhidaHttpModelAdapter().organize({ query: '测试', inputMode: 'topic', questionUrl: null, constraints, sources: singleSource });
       expect(calledUrl).toBe('https://developer.zhihu.com/v1/chat/completions');
       expect(requestBody).toMatchObject({ model: 'zhida-fast-1p5', stream: false });
       expect(requestBody.messages).toHaveLength(1);
-      expect(raw).toEqual(replayMap);
+      expect(raw).toMatchObject({ ...analysis, query: '测试', dataStatus: { mode: 'live' }, sources: [{ sourceId: 'src_1', url: singleSource[0].url, quoteableText: singleSource[0].summary }] });
+      expect(JSON.stringify(requestBody.messages)).toContain('doneWhen');
+      // A fabricated quote must fail against the fetched source even when the
+      // model could have invented matching source metadata for it.
+      analysis.evidence[0].quote = '模型虚构的原话';
+      await expect(new ZhidaHttpModelAdapter().organize({ query: '测试', inputMode: 'topic', questionUrl: null, constraints, sources: singleSource })).rejects.toThrow('EVIDENCE_INSUFFICIENT');
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
@@ -42,6 +49,11 @@ describe('pipeline validation', () => {
 });
 
 describe('pipeline evidence gates', () => {
+  it('rejects dangling task references before returning a map to the browser', async () => {
+    const map = await new DeterministicModelAdapter().organize({ query: '测试', inputMode: 'topic', questionUrl: null, constraints, sources: singleSource });
+    map.routes[0].stages[0].tasks[0].evidenceIds = ['missing'];
+    expect(() => validateModelOutput(map)).toThrow('EVIDENCE_INSUFFICIENT');
+  });
   it('maps non-contiguous quotes to evidence insufficiency', async () => {
     const adapter = new DeterministicModelAdapter();
     const map = await adapter.organize({ query: '测试', inputMode: 'topic', questionUrl: null, constraints, sources: [{ contentType: 'answer', summary: '可执行建议', url: 'https://www.zhihu.com/a' }, { contentType: 'article', summary: '另一条建议', url: 'https://zhuanlan.zhihu.com/p/2' }] });

@@ -59,12 +59,7 @@ export class ZhidaHttpModelAdapter implements ModelAdapter {
       if (response.status === 429) throw new UpstreamError('UPSTREAM_RATE_LIMIT', '知乎直答服务暂时达到调用限制。');
       if (!response.ok) throw new Error('MODEL_INVALID_OUTPUT');
       const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-      const modelJson = parseModelJson(payload.choices?.[0]?.message?.content);
-      // Keep backwards compatibility with the original adapter contract while
-      // preferring the smaller analysis payload in production prompts.
-      const full = ExperienceMapSchema.safeParse(modelJson);
-      if (full.success) return full.data;
-      const parsed = AnalysisSchema.safeParse(modelJson);
+      const parsed = AnalysisSchema.safeParse(parseModelJson(payload.choices?.[0]?.message?.content));
       if (!parsed.success) throw new Error('MODEL_INVALID_OUTPUT');
       return validateModelOutput({
         ...parsed.data, schemaVersion: '1.0', mapId: `map_${randomUUID()}`,
