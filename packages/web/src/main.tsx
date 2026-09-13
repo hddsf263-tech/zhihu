@@ -14,7 +14,7 @@ const example: CreateMapJobRequest = {
   inputMode: 'topic', query: '大学生如何准备第一份产品经理实习？', questionUrl: null, focus: null,
   constraints: { background: '零实习经历', weeks: 8, hoursPerWeek: 10, budgetCny: 500 }, dataMode: 'replay'
 };
-const modeLabel = mode === 'mock' ? '离线演示 · 合成数据' : mode === 'replay' ? '接口回放 · 合成数据' : '实时接口 · 待后端验证';
+const modeLabel = mode === 'mock' ? '离线演示 · 合成数据' : mode === 'replay' ? '接口回放 · 合成数据' : '按你的问题检索知乎';
 const blankError = (message: string): ClientError => ({ code: 'INVALID_RESPONSE', message, retryable: false });
 
 function Shell({ children }: { children: ReactNode }) {
@@ -66,7 +66,7 @@ function Home() {
   return <main id="main" className="page home-page"><section className="hero"><div className="eyebrow">知乎内容的下一种读法</div>
     <h1>把零散经验，变成<br /><em>可比较的下一步</em></h1><p className="hero-copy">看清不同建议的前提、分歧与风险，再选择适合自己的行动。</p></section>
     <form className="input-card" onSubmit={onSubmit} noValidate>
-      <p className="notice">{modeLabel}。{mode !== 'live' ? '当前只展示固定实习案例，修改输入不会生成新内容。' : '实时能力仍在联调；失败时可明确切换演示案例。'}</p>
+      <p className="notice">{modeLabel}。{mode !== 'live' ? '当前只展示固定实习案例，修改输入不会生成新内容。' : '比较不同选择的利弊，生成有来源的行动路线。首次打开可能需要约一分钟唤醒服务。'}</p>
       <div className="mode-tabs" role="group" aria-label="输入方式">
         <button type="button" aria-pressed={draft.inputMode === 'topic'} className={draft.inputMode === 'topic' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'topic', questionUrl: null, query: '' }))}>输入主题</button>
         <button type="button" aria-pressed={draft.inputMode === 'question_url'} className={draft.inputMode === 'question_url' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'question_url', query: null, questionUrl: '' }))}>粘贴知乎问题链接</button>
@@ -81,7 +81,7 @@ function Home() {
         <label>预算（元）<input type="number" min={0} max={1000000} value={draft.constraints.budgetCny ?? ''} onChange={e => setConstraint('budgetCny', e.target.value)} /></label></div>}
       {error && <p role="alert" className="form-error">{errorText(error)}</p>}
       <div className="form-actions"><button className="ghost-button" type="button" onClick={() => { setDraft(example); setExpanded(true); setError(null); }}>填入实习示例</button>
-        <button className="primary-button" disabled={busy}>{busy ? '正在创建任务…' : mode === 'live' ? '生成经验地图 →' : '查看示例地图 →'}</button></div>
+        <button className="primary-button" disabled={busy}>{busy ? '正在连接服务，请稍候…' : mode === 'live' ? '生成经验地图 →' : '查看示例地图 →'}</button></div>
     </form><section className="home-foot"><span>摘要不冒充全文</span><button className="text-link" disabled={busy} onClick={() => void submit(example)}>查看已整理案例 →</button></section></main>;
 }
 
@@ -94,7 +94,7 @@ function JobPage() {
   useEffect(() => {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
     setJob(null); setError(null);
-    const deadline = setTimeout(() => { setError({ code: 'WAIT_TIMEOUT', message: '等待超过 95 秒，结果尚未确认，可手动再次检查。', retryable: true }); controller.abort(); clearTimeout(timer); }, 95000);
+    const deadline = setTimeout(() => { setError({ code: 'WAIT_TIMEOUT', message: '整理仍在进行，结果尚未确认，可以再次检查状态。', retryable: true }); controller.abort(); clearTimeout(timer); }, 150000);
     async function poll() {
       const result = await api.getJob(jobId, controller.signal);
       if (controller.signal.aborted) return;

@@ -32,7 +32,8 @@ export function createHttpClient(fetcher: typeof fetch = fetch): MapClient {
     const abort = () => controller.abort();
     if (signal?.aborted) controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
-    const timer = setTimeout(abort, 12000);
+    // A free hosting instance may need over 50 seconds to wake up.
+    const timer = setTimeout(abort, 75000);
     try {
       const response = await fetcher(`/api/v1${path}`, { ...init, signal: controller.signal, credentials: 'same-origin' });
       const value: unknown = await response.json();

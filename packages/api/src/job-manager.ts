@@ -68,14 +68,14 @@ export class JobManager {
   }
   private async run(jobId: string, request: CreateMapJobRequest) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 95_000);
+    const timer = setTimeout(() => controller.abort(), 120_000);
     try {
       this.update(jobId, { status: 'retrieving', message: request.inputMode === 'topic' ? '查找知乎内容' : '查找问题下的回答' });
       const sources = request.inputMode === 'topic'
         ? await this.client.search(request.query!, controller.signal)
         : await this.client.questionAnswers(request.questionUrl!, controller.signal);
       this.update(jobId, { status: 'organizing', message: '整理经验路线' });
-      const raw = await this.model.organize({ query: request.query, inputMode: request.inputMode, questionUrl: request.questionUrl, sources, constraints: request.constraints });
+      const raw = await this.model.organize({ query: request.query, inputMode: request.inputMode, questionUrl: request.questionUrl, focus: request.focus, sources, constraints: request.constraints }, controller.signal);
       this.update(jobId, { status: 'validating', message: '检查来源' });
       const map = validateModelOutput(raw);
       this.store.saveMap(map);
@@ -91,7 +91,7 @@ export class JobManager {
       this.update(jobId, {
         status: 'failed',
         message: '整理失败',
-        error: { code, message: '整理结果未通过校验，请稍后重试。', retryable: code === 'UPSTREAM_TIMEOUT', requestId: `req_${randomUUID()}` },
+        error: { code, message: error instanceof UpstreamError ? error.message : '整理结果未通过校验，请稍后重试。', retryable: code === 'UPSTREAM_TIMEOUT', requestId: `req_${randomUUID()}` },
         retryable: code === 'UPSTREAM_TIMEOUT'
       });
     } finally {
