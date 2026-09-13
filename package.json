@@ -1,0 +1,24 @@
+{
+  "name": "zhihu-experience-map",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n web,api -c blue,green \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev:web": "pnpm --filter @experience-map/web dev",
+    "dev:api": "pnpm --filter @experience-map/api dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @experience-map/web test:e2e",
+    "build": "pnpm -r build",
+    "contracts:check": "pnpm --filter @experience-map/contracts contracts:check",
+    "seed:replay": "pnpm --filter @experience-map/api seed:replay",
+    "health": "pnpm --filter @experience-map/api health"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
