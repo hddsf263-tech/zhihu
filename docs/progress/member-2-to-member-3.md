@@ -44,3 +44,13 @@
 - `packages/api/src/server.ts`
 - `packages/web/src/main.tsx`
 
+
+## 基线验收结果（2026-09-13）
+
+- `pnpm install`：通过；pnpm 11.19.0，提示 `pnpm.onlyBuiltDependencies` 配置将被忽略。
+- `pnpm lint`：通过；contracts、api、web TypeScript 检查通过。
+- `pnpm test`：通过；contracts 3 项、api 7 项、web 1 项，共 11 项。
+- `pnpm build`：通过；contracts、api、web 构建成功。
+- `pnpm contracts:check`：通过。
+
+此前 `pnpm approve-builds esbuild` 的交互/安全限制已记录；本轮安装和构建已实际完成。
