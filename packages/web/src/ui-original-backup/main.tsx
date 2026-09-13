@@ -11,10 +11,9 @@ const places = [
 
 function Guide() {
   const [wave, setWave] = useState(false);
-  const [open, setOpen] = useState(false);
-  return <button className={`guide ${open ? "open" : ""}`} onClick={() => setOpen((v) => !v)} onMouseEnter={() => setWave(true)} onMouseLeave={() => setWave(false)} onFocus={() => setWave(true)} onBlur={() => setWave(false)} aria-expanded={open} aria-label="小山：打开地图提示">
+  return <button className="guide" onMouseEnter={() => setWave(true)} onMouseLeave={() => setWave(false)} onFocus={() => setWave(true)} onBlur={() => setWave(false)} aria-label="小山向导：查看提示">
     <img src={`/assets/${wave ? 'xiaoshan-wave' : 'xiaoshan-idle'}.gif`} alt="小山向导" />
-    <span className="speech"><strong>小山</strong><br />{open ? '这里有很多地方可以探索，先选一条你能坚持的路。' : '先走一条你能坚持的路'}</span>
+    <span className="speech"><strong>小山</strong><br />先走一条你能坚持的路</span>
   </button>;
 }
 
