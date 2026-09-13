@@ -151,7 +151,12 @@ function buildPrompt(input: ModelInput, sources: ExperienceMap['sources']): stri
 
 function parseModelJson(content: string | undefined): unknown {
   if (!content) throw new Error('MODEL_INVALID_OUTPUT');
-  const trimmed = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  try { return JSON.parse(trimmed); }
-  catch { throw new Error('MODEL_INVALID_OUTPUT'); }
+  const trimmed = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  try { return JSON.parse(trimmed); } catch { /* Some model versions add a short preamble. */ }
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { /* fall through */ }
+  }
+  throw new Error('MODEL_INVALID_OUTPUT');
 }
