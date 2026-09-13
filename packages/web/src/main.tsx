@@ -94,11 +94,16 @@ function JobPage() {
   useEffect(() => {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
     setJob(null); setError(null);
-    const deadline = setTimeout(() => { setError({ code: 'WAIT_TIMEOUT', message: '整理仍在进行，结果尚未确认，可以再次检查状态。', retryable: true }); controller.abort(); clearTimeout(timer); }, 150000);
+    const deadline = setTimeout(() => { setError({ code: 'WAIT_TIMEOUT', message: '整理仍在进行，结果尚未确认，可以再次检查状态。', retryable: true }); controller.abort(); clearTimeout(timer); }, 180000);
+    let transientFailures = 0;
     async function poll() {
       const result = await api.getJob(jobId, controller.signal);
       if (controller.signal.aborted) return;
-      if (!result.ok) { clearTimeout(deadline); setError(result.error); return; }
+      if (!result.ok) {
+        if (result.error.code === 'NETWORK_ERROR' && transientFailures < 5) { transientFailures += 1; timer = setTimeout(poll, 3000); return; }
+        clearTimeout(deadline); setError(result.error); return;
+      }
+      transientFailures = 0;
       const current = result.data; setJob(current);
       if (current.status === 'succeeded') {
         clearTimeout(deadline);

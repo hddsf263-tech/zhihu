@@ -14,6 +14,8 @@ export interface MapClient {
 }
 const invalid: ClientError = { code: 'INVALID_RESPONSE', message: '返回数据不符合共享契约，请联系项目维护者。', retryable: false };
 export const messages: Record<string, string> = {
+  NETWORK_ERROR: '网络暂时中断，正在自动重连；请保持页面打开。',
+  WAIT_TIMEOUT: '整理时间较长，结果尚未确认，请点击再次检查状态。',
   UPSTREAM_AUTH: '知乎内容服务尚未配置或授权失效，可先查看演示案例。',
   UPSTREAM_EMPTY: '未找到可整理的内容，请缩短问题或换个主题。',
   UPSTREAM_RATE_LIMIT: '内容服务已达到调用限制，可稍后再试或查看演示案例。',
@@ -33,7 +35,7 @@ export function createHttpClient(fetcher: typeof fetch = fetch): MapClient {
     if (signal?.aborted) controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     // A free hosting instance may need over 50 seconds to wake up.
-    const timer = setTimeout(abort, 75000);
+    const timer = setTimeout(abort, 150000);
     try {
       const response = await fetcher(`/api/v1${path}`, { ...init, signal: controller.signal, credentials: 'same-origin' });
       const value: unknown = await response.json();
