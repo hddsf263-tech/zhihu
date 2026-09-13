@@ -11,14 +11,16 @@
 - API 基线提供三个固定接口和回放地图读取，供成员三按 contracts/fixtures 开始页面骨架。
 - M2-2～M2-5 基线代码已落盘：Provider、Pipeline/ModelAdapter、JobManager、迁移脚本、健康检查和部署说明。
 - M2-3/M2-4 增量测试已补充：非连续引用、证据来源数量、live 幂等键复用、replay 只读。
+- M2-5 安全补强已完成：服务端脱敏函数对任何密钥值统一返回 `[REDACTED]`，不再保留首尾字符，并增加配置安全单测。
 
-## 基线与增量验收证据（2026-09-13）
+## M2 本地验收证据（2026-09-13）
 
 - `pnpm install`：通过；pnpm 11.19.0，提示 `pnpm.onlyBuiltDependencies` 配置将被忽略。
 - `pnpm lint`：通过；contracts、api、web TypeScript 检查通过。
-- `pnpm test`：通过；contracts 3 项、api 11 项、web 1 项，共 15 项。
+- `pnpm test`：通过；contracts 3 项、api 12 项、web 1 项，共 16 项。
 - `pnpm build`：通过；contracts、api、web 构建成功。
 - `pnpm contracts:check`：通过。
+- `pnpm health`：通过；API 返回 `ok: true`。
 
 ## 未核验与风险
 

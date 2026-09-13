@@ -10,5 +10,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
 }
 
 export function redact(value: string): string {
-  return value.length <= 8 ? '[REDACTED]' : `${value.slice(0, 4)}…${value.slice(-4)}`;
+  return '[REDACTED]';
 }
