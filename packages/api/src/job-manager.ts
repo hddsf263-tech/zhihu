@@ -75,7 +75,7 @@ export class JobManager {
         ? await this.client.search(request.query!, controller.signal)
         : await this.client.questionAnswers(request.questionUrl!, controller.signal);
       this.update(jobId, { status: 'organizing', message: '整理经验路线' });
-      const raw = await this.model.organize({ query: request.query, sources, constraints: request.constraints });
+      const raw = await this.model.organize({ query: request.query, inputMode: request.inputMode, questionUrl: request.questionUrl, sources, constraints: request.constraints });
       this.update(jobId, { status: 'validating', message: '检查来源' });
       const map = validateModelOutput(raw);
       this.store.saveMap(map);
