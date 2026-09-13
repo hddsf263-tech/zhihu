@@ -1,0 +1,9 @@
+{
+  "name": "@experience-map/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/server.ts", "lint": "tsc --noEmit", "test": "vitest run", "build": "tsc --outDir dist --declaration false", "seed:replay": "tsx src/seed-replay.ts", "health": "tsx src/health.ts" },
+  "dependencies": { "@experience-map/contracts": "workspace:*", "cors": "^2.8.5", "express": "^5.0.1", "zod": "^4.0.5" },
+  "devDependencies": { "@types/cors": "^2.8.17", "@types/express": "^5.0.0", "@types/node": "^22.10.5", "@types/supertest": "^6.0.2", "supertest": "^7.0.0", "tsx": "^4.19.2", "typescript": "^5.7.3", "vitest": "^2.1.8" }
+}

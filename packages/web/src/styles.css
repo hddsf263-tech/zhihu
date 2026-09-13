@@ -1,0 +1,5 @@
+:root { color: #172033; background: #f6f7f9; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 64px 24px; }
+a { color: #1769e0; }
+label { display: flex; gap: 12px; min-height: 44px; align-items: center; }
