@@ -76,12 +76,12 @@ test('submission is guarded against repeat clicks and preserves zero budget', as
   await button.evaluate((node: HTMLButtonElement) => { node.click(); node.click(); });
   await expect(page).toHaveURL(new RegExp(mapPath)); expect(posts).toBe(1);
 });
-test('95 second wait boundary stops automatic polling and offers manual recovery', async ({ page }) => {
+test('150 second wait boundary stops automatic polling and offers manual recovery', async ({ page }) => {
   let polls = 0;
   await page.clock.install();
   await page.route('**/api/v1/maps/jobs/waiting', r => { polls++; return r.fulfill({ json: { ...replayJob, status: 'retrieving', mapId: null } }); });
   await page.goto('/jobs/waiting'); await expect(page.getByRole('heading', { name: '把经验线索放到一起' })).toBeVisible();
-  await page.clock.fastForward(96000); await expect(page.getByRole('alert')).toContainText('95 秒');
+  await page.clock.fastForward(151000); await expect(page.getByRole('alert')).toContainText('再次检查状态');
   const count = polls; await page.clock.fastForward(10000); expect(polls).toBe(count);
   await expect(page.getByRole('button', { name: '再次检查状态' })).toBeVisible();
 });
