@@ -46,6 +46,15 @@ export function createApp(options: { store?: JobStore; client?: ZhihuClient; mod
     return res.json(map);
   });
 
+  // In the production container, serve the built Vite app from the same
+  // origin as the API. Keeping API routes above this fallback prevents the
+  // SPA handler from masking API errors.
+  const webDist = resolve(process.cwd(), 'packages/web/dist');
+  app.use(express.static(webDist));
+  app.get(/^(?!\/api\/v1(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(resolve(webDist, 'index.html'));
+  });
+
   return { app, manager };
 }
 
@@ -56,7 +65,8 @@ const defaultApplication = process.env.NODE_ENV === 'test'
 export const app = defaultApplication.app;
 
 if (process.env.NODE_ENV !== 'test') {
-  const server = app.listen(Number(process.env.API_PORT ?? 3001), () => console.log(`API listening on ${process.env.API_PORT ?? 3001}`));
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
+  const server = app.listen(port, () => console.log(`API listening on ${port}`));
   const close = () => server.close(() => { defaultApplication.manager.close(); process.exit(0); });
   process.once('SIGINT', close);
   process.once('SIGTERM', close);
