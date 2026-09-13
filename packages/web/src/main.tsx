@@ -6,7 +6,9 @@ import { createHttpClient, createMockClient, resolveMode, errorText, type Client
 import { markdownPlan, planKey, readCompleted, safeSourceUrl, statusLabel, synthetic } from './presentation.js';
 import './styles.css';
 
-const mode = resolveMode(import.meta.env.VITE_DATA_MODE);
+// Local development stays deterministic; the production container defaults to
+// real server-side Zhihu retrieval unless Render explicitly sets another mode.
+const mode = resolveMode(import.meta.env.VITE_DATA_MODE, import.meta.env.PROD);
 const api = mode === 'mock' ? createMockClient() : createHttpClient();
 const example: CreateMapJobRequest = {
   inputMode: 'topic', query: '大学生如何准备第一份产品经理实习？', questionUrl: null, focus: null,

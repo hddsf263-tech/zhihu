@@ -85,8 +85,8 @@ export function createMockClient(): MapClient {
     async getMap(id) { const { replayMap } = await fixture(); return id === replayMap.mapId ? { ok: true, data: ExperienceMapSchema.parse(replayMap) } : missing; }
   };
 }
-export function resolveMode(value: unknown): ClientMode {
-  if (value === undefined || value === '') return 'replay';
+export function resolveMode(value: unknown, production = false): ClientMode {
+  if (value === undefined || value === '') return production ? 'live' : 'replay';
   if (value === 'mock' || value === 'replay' || value === 'live') return value;
   throw new Error('VITE_DATA_MODE must be mock, replay or live');
 }
