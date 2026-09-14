@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CreateMapJobRequest } from '@experience-map/contracts';
-import { JobManager } from './job-manager.js';
+import { expandTopicQueries, JobManager, normalizeQuestionUrl } from './job-manager.js';
 import { MemoryJobStore, SqliteJobStore } from './job-store.js';
 import { DeterministicModelAdapter } from './pipeline.js';
 import type { ZhihuClient, ZhihuSource } from './providers.js';
@@ -36,6 +36,35 @@ afterEach(() => {
 });
 
 describe('job manager M2-4 boundaries', () => {
+  it('normalizes answer links to the canonical question URL for question-answer retrieval', () => {
+    expect(normalizeQuestionUrl('https://www.zhihu.com/question/25217211/answer/1619249862')).toBe('https://www.zhihu.com/question/25217211');
+    expect(normalizeQuestionUrl('https://www.zhihu.com/question/25217211')).toBe('https://www.zhihu.com/question/25217211');
+  });
+
+  it('normalizes conversational Japanese-learning queries into searchable core forms', () => {
+    expect(expandTopicQueries('怎么准备从零学日语')).toEqual([
+      '怎么准备从零学日语', '从零学日语', '零基础 学日语', '学日语 学习路线'
+    ]);
+    expect(expandTopicQueries('怎么选专业')).toContain('选专业 考虑因素');
+    expect(expandTopicQueries('怎么准备自驾')).toContain('自驾 准备清单');
+  });
+
+  it('continues with normalized queries after the precise query is empty', async () => {
+    const calls: string[] = [];
+    const client: ZhihuClient = {
+      search: vi.fn(async (query: string) => {
+        calls.push(query);
+        if (calls.length === 1) throw new (await import('./providers.js')).UpstreamError('UPSTREAM_EMPTY', 'empty');
+        return [{ contentType: 'answer' as const, summary: `可执行建议 ${calls.length}`, url: `https://www.zhihu.com/a/${calls.length}` }];
+      }),
+      questionAnswers: vi.fn(async () => [])
+    };
+    const manager = new JobManager(client, new DeterministicModelAdapter());
+    const created = manager.create({ ...liveRequest, query: '怎么准备从零学日语' }, 'japanese-query');
+    const completed = await waitForTerminal(manager, created.jobId);
+    expect(completed.status).toBe('succeeded');
+    expect(calls).toEqual(['怎么准备从零学日语', '从零学日语', '零基础 学日语', '学日语 学习路线']);
+  });
   it('reuses the same live job for an idempotency key', async () => {
     const counter = { calls: 0 };
     const manager = new JobManager(fakeClient(counter), new DeterministicModelAdapter());

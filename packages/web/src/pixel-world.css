@@ -1,6 +1,5 @@
 /* Pixel world home hero: approved 16:10 artwork, animated Liukanshan guide and
    place hotspots. Hotspot percentages are authored against approved-map-ui-clean.png. */
-.home-page{max-width:1040px}
 .pixel-world{position:relative;width:100%;aspect-ratio:16/10;margin:0;background:#b9d9d2;border:8px solid #805335;border-radius:18px;box-shadow:0 14px 0 #74523433,0 26px 45px #5a3e2433;overflow:hidden}
 .pixel-art{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain}
 .guide-plate{position:absolute;z-index:2;left:48.55%;top:21.65%;width:11.05%;aspect-ratio:1;border-radius:50%;background:#fff4dc;border:clamp(4px,.62vw,9px) solid #805335;box-shadow:0 8px 0 #4a342455;pointer-events:none}

@@ -60,7 +60,7 @@ export const EvidenceSchema = z.object({
 export type Evidence = z.infer<typeof EvidenceSchema>;
 
 export const TaskSchema = z.object({ taskId: z.string().min(1), action: z.string().min(1), doneWhen: z.string().min(1), evidenceIds: z.array(z.string().min(1)).min(1) }).strict();
-export const StageSchema = z.object({ stageId: z.string().min(1), title: z.string().min(1), suggestedWeeks: z.string().min(1), tasks: z.array(TaskSchema).min(1).max(3) }).strict();
+export const StageSchema = z.object({ stageId: z.string().min(1), title: z.string().min(1), suggestedWeeks: z.string(), tasks: z.array(TaskSchema).min(1).max(3) }).strict();
 export const RouteSchema = z.object({
   routeId: z.string().min(1), title: z.string().min(1), strategy: z.string().min(1), fit: z.array(z.string().min(1)),
   tradeoffs: z.array(z.object({ label: z.string().min(1), value: z.string().min(1) }).strict()), stages: z.array(StageSchema).min(2).max(5),
@@ -70,10 +70,23 @@ export type Route = z.infer<typeof RouteSchema>;
 
 export const DifferenceSchema = z.object({ title: z.string().min(1), summary: z.string().min(1), evidenceIds: z.array(z.string().min(1)).min(1) }).strict();
 export const DataStatusSchema = z.object({ mode: DataModeSchema, retrievedAt: z.string().datetime(), sources: z.string().min(1), notice: z.string().min(1) }).strict();
+// Optional metadata keeps existing saved maps and fixtures readable.
+export const PresentationSchema = z.object({
+  kind: z.enum(['plan', 'process', 'choice', 'preparation', 'skill', 'insight']),
+  timing: z.enum(['none', 'source', 'suggested']),
+  timingNote: z.string(),
+  completeness: z.enum(['complete', 'sources_only']),
+  focus: z.object({
+    requested: z.string().nullable(),
+    status: z.enum(['not_requested', 'covered', 'limited']),
+    summary: z.string(),
+    evidenceIds: z.array(z.string())
+  }).strict()
+}).strict();
 export const ExperienceMapSchema = z.object({
   schemaVersion: z.literal('1.0'), mapId: z.string().min(1), query: z.string().nullable(), inputMode: InputModeSchema, questionUrl: z.string().url().nullable(),
   constraints: constraintsSchema, dataStatus: DataStatusSchema, overview: z.string().min(1), routes: z.array(RouteSchema).max(3),
-  differences: z.array(DifferenceSchema), evidence: z.array(EvidenceSchema), sources: z.array(SourceSchema), limitations: z.array(z.string().min(1))
+  differences: z.array(DifferenceSchema), evidence: z.array(EvidenceSchema), sources: z.array(SourceSchema), limitations: z.array(z.string().min(1)), presentation: PresentationSchema.optional()
 }).strict();
 export type ExperienceMap = z.infer<typeof ExperienceMapSchema>;
 

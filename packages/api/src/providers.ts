@@ -8,11 +8,14 @@ export class UpstreamError extends Error {
 export type ZhihuSource = {
   contentType: 'answer' | 'article' | 'question_answer_summary';
   title?: string;
+  questionTitle?: string | null;
   authorName?: string | null;
   summary: string;
   url: string;
   publishedAt?: string | null;
   contentToken?: string;
+  authorityLevel?: string | null;
+  metrics?: Record<string, number> | null;
 };
 export type ZhihuClient = {
   search(query: string, signal: AbortSignal): Promise<ZhihuSource[]>;
@@ -95,15 +98,35 @@ export function normalizeZhihuItem(item: unknown, fallbackContentType?: ZhihuSou
   const contentType = fallbackContentType
     ?? (rawContentType === 'article' ? 'article' : rawContentType === 'question_answer_summary' ? 'question_answer_summary' : 'answer');
   const editTime = value.EditTime ?? value.editTime;
+  const nestedQuestion = value.Question && typeof value.Question === 'object' ? value.Question as Record<string, unknown> : undefined;
+  const questionTitle = pickText(value, ['QuestionTitle', 'questionTitle', 'QuestionName', 'questionName'])
+    || (nestedQuestion ? pickText(nestedQuestion, ['Title', 'title', 'Name', 'name']) : '');
+  const metrics = numericMetrics(value, [
+    ['voteUpCount', ['VoteUpCount', 'VoteupCount', 'voteUpCount', 'voteupCount', 'LikeCount', 'likeCount']],
+    ['commentCount', ['CommentCount', 'commentCount']],
+    ['followerCount', ['FollowerCount', 'followerCount', 'AuthorFollowerCount', 'authorFollowerCount']]
+  ]);
   return [{
     contentType,
     title: pickText(value, ['Title', 'title']) || undefined,
+    questionTitle: questionTitle || null,
     authorName: pickText(value, ['AuthorName', 'authorName']) || null,
     summary,
     url,
     publishedAt: typeof editTime === 'number' ? new Date(editTime * 1000).toISOString() : pickText(value, ['PublishedAt', 'publishedAt']) || null,
-    contentToken: pickText(value, ['ContentToken', 'contentToken', 'ContentID', 'contentId']) || undefined
+    contentToken: pickText(value, ['ContentToken', 'contentToken', 'ContentID', 'contentId']) || undefined,
+    authorityLevel: pickText(value, ['AuthorityLevel', 'authorityLevel']) || null,
+    metrics
   }];
+}
+
+function numericMetrics(value: Record<string, unknown>, fields: Array<[string, string[]]>): Record<string, number> | null {
+  const result: Record<string, number> = {};
+  for (const [name, keys] of fields) {
+    const found = keys.map(key => value[key]).find(item => typeof item === 'number' || (typeof item === 'string' && item.trim() !== '' && Number.isFinite(Number(item))));
+    if (found !== undefined && Number.isFinite(Number(found)) && Number(found) >= 0) result[name] = Number(found);
+  }
+  return Object.keys(result).length ? result : null;
 }
 
 function pickText(value: Record<string, unknown>, keys: string[]): string {
@@ -118,5 +141,5 @@ export function dedupeSources(sources: ZhihuSource[]): ZhihuSource[] {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 10);
+  }).slice(0, 30);
 }

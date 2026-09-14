@@ -15,7 +15,6 @@ const example: CreateMapJobRequest = {
   inputMode: 'topic', query: '大学生如何准备第一份产品经理实习？', questionUrl: null, focus: null,
   constraints: { background: '零实习经历', weeks: 8, hoursPerWeek: 10, budgetCny: 500 }, dataMode: 'replay'
 };
-const modeLabel = mode === 'mock' ? '离线演示 · 合成数据' : mode === 'replay' ? '接口回放 · 合成数据' : '按你的问题检索知乎';
 const blankError = (message: string): ClientError => ({ code: 'INVALID_RESPONSE', message, retryable: false });
 
 function Shell({ children }: { children: ReactNode }) {
@@ -38,8 +37,7 @@ function getDraft(): CreateMapJobRequest {
 function rememberRequest(jobId: string, request: CreateMapJobRequest) {
   try { sessionStorage.setItem(`experience-map:job:${jobId}`, JSON.stringify(request)); } catch { /* Browser can still poll by job ID. */ }
 }
-// Home hero places. The artwork is 16:10 and the hotspot classes below are
-// positioned against it; each place seeds a real, retrievable question.
+// Place prompts and artwork are preserved from main e5b4b98.
 const mapPlaces = [
   { id: 'portfolio', className: 'portfolio', title: '作品村', hint: '先做出可展示的作品', query: '如何做出第一个能拿得出手的作品？', focus: '作品集' },
   { id: 'feedback', className: 'feedback', title: '投递码头', hint: '尽早拿到真实反馈', query: '第一次投递简历前要准备到什么程度？', focus: '投递反馈' },
@@ -48,15 +46,17 @@ const mapPlaces = [
 function Home() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState(getDraft);
-  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ClientError | null>(null);
   const pending = useRef(false);
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const queryRef = useRef<HTMLTextAreaElement>(null);
+  const questionUrlRef = useRef<HTMLInputElement>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  useEffect(() => { if (focusRequest > 0) queryRef.current?.focus(); }, [focusRequest]);
+  useEffect(() => {
+    if (focusRequest > 0) (draft.inputMode === 'topic' ? queryRef.current : questionUrlRef.current)?.focus({ preventScroll: true });
+  }, [focusRequest, draft.inputMode]);
   function revealInput() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setFocusRequest(count => count + 1);
@@ -66,10 +66,11 @@ function Home() {
     setError(null);
     revealInput();
   }
+
   async function submit(payload: CreateMapJobRequest) {
     if (pending.current) return;
-    const parsed = CreateMapJobRequestSchema.safeParse(payload);
-    if (!parsed.success) { setError(blankError('请检查输入：主题不可为空，问题链接必须有效，周数 1–104、每周小时数 0–168、预算 0–1000000。')); return; }
+    const parsed = CreateMapJobRequestSchema.safeParse({ ...payload, constraints: { background: null, weeks: null, hoursPerWeek: null, budgetCny: null } });
+    if (!parsed.success) { setError(blankError('请检查输入：主题不可为空，或粘贴有效的知乎问题、回答链接。')); return; }
     pending.current = true; setBusy(true); setError(null);
     const body = JSON.stringify(parsed.data);
     if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
@@ -81,41 +82,32 @@ function Home() {
     navigate(`/jobs/${encodeURIComponent(result.data.jobId)}`);
   }
   function onSubmit(event: FormEvent) { event.preventDefault(); void submit({ ...draft, dataMode: mode === 'live' ? 'live' : 'replay' }); }
-  function setConstraint(key: keyof CreateMapJobRequest['constraints'], value: string) {
-    setDraft(current => ({ ...current, constraints: { ...current.constraints, [key]: key === 'background' ? value || null : value === '' ? null : Number(value) } }));
-  }
-  return <main id="main" className="page home-page">
-    <section className="pixel-world" aria-label="知乎像素经验地图">
+
+  return <main id="main" className="page home-page"><section className="pixel-world" aria-label="知乎像素经验地图">
       <img className="pixel-art" src="/assets/approved-map-ui-clean.png" alt="知乎像素经验地图：作品村、投递码头、技能森林，以及举着路牌的刘看山向导" />
       <span className="guide-plate" aria-hidden="true" />
       <img className="guide-gif" src="/assets/liukanshan-guide.gif" alt="刘看山动态向导" />
       <div className="pixel-hotspots">
-        {mapPlaces.map(place => <button type="button" key={place.id} className={`hotspot ${place.className}`} onClick={() => startFromPlace(place)} aria-label={`${place.title}：${place.hint}`}><span className="sr-only">{place.title}：{place.hint}</span></button>)}
+        {mapPlaces.map(place => <button type="button" key={place.id} className={`hotspot ${place.className}`} disabled={busy} onClick={() => startFromPlace(place)} aria-label={`${place.title}：${place.hint}`}><span className="sr-only">{place.title}：{place.hint}</span></button>)}
         <button type="button" className="hotspot guide-hotspot" onClick={revealInput} aria-label="刘看山向导：去输入你的问题"><span className="sr-only">刘看山向导：去输入你的问题</span></button>
         <button type="button" className="hotspot stamp-hotspot" disabled={busy} onClick={() => void submit(example)} aria-label="证据邮票：打开已整理的实习案例"><span className="sr-only">证据邮票：打开已整理的实习案例</span></button>
       </div>
     </section>
     <p className="pixel-caption">点地图上的地点，小山会把它变成可以直接检索的问题；也可以直接在下面写下你自己的问题。</p>
     <section className="hero"><div className="eyebrow">知乎内容的下一种读法</div>
-    <h1>把零散经验，变成<br /><em>可比较的下一步</em></h1><p className="hero-copy">看清不同建议的前提、分歧与风险，再选择适合自己的行动。</p></section>
+    <h1>把零散经验，变成<br /><em>可比较的下一步</em></h1><p className="hero-copy">看清不同建议的前提、分歧与风险，再选择适合自己的行动。</p>
+    <div className="how-it-works" aria-label="产品工作方式"><div><span>01</span><b>提出一个具体问题</b><small>主题或知乎问题链接都可以</small></div><i aria-hidden="true">→</i><div><span>02</span><b>对照不同经验路径</b><small>按条件、投入和风险比较</small></div><i aria-hidden="true">→</i><div><span>03</span><b>带走一份行动清单</b><small>每一步都有来源可以回看</small></div></div></section>
     <form ref={formRef} className="input-card" onSubmit={onSubmit} noValidate>
-      <p className="notice">{modeLabel}。{mode !== 'live' ? '当前只展示固定实习案例，修改输入不会生成新内容。' : '比较不同选择的利弊，生成有来源的行动路线。首次打开可能需要约一分钟唤醒服务。'}</p>
       <div className="mode-tabs" role="group" aria-label="输入方式">
         <button type="button" aria-pressed={draft.inputMode === 'topic'} className={draft.inputMode === 'topic' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'topic', questionUrl: null, query: '' }))}>输入主题</button>
         <button type="button" aria-pressed={draft.inputMode === 'question_url'} className={draft.inputMode === 'question_url' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'question_url', query: null, questionUrl: '' }))}>粘贴知乎问题链接</button>
       </div>
       {draft.inputMode === 'topic' ? <label className="field-label">你正在考虑什么？<textarea ref={queryRef} maxLength={500} rows={3} value={draft.query ?? ''} onChange={e => setDraft({ ...draft, query: e.target.value })} placeholder="例如：大学生如何准备第一份产品经理实习？" /></label>
-        : <label className="field-label">知乎问题链接<input type="url" value={draft.questionUrl ?? ''} onChange={e => setDraft({ ...draft, questionUrl: e.target.value })} placeholder="https://www.zhihu.com/question/..." /></label>}
+        : <label className="field-label">知乎问题链接<input ref={questionUrlRef} type="url" value={draft.questionUrl ?? ''} onChange={e => setDraft({ ...draft, questionUrl: e.target.value })} placeholder="https://www.zhihu.com/question/..." /></label>}
       <label className="field-label">你最想关注什么？<input maxLength={300} value={draft.focus ?? ''} onChange={e => setDraft({ ...draft, focus: e.target.value || null })} placeholder="可选：时间、成本、作品集、风险……" /></label>
-      <button type="button" className="constraints-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>补充我的条件 <span>{expanded ? '收起' : '展开'}</span></button>
-      {expanded && <div className="constraint-grid"><label>我的背景<input maxLength={200} value={draft.constraints.background ?? ''} onChange={e => setConstraint('background', e.target.value)} /></label>
-        <label>准备周期（周）<input type="number" min={1} max={104} value={draft.constraints.weeks ?? ''} onChange={e => setConstraint('weeks', e.target.value)} /></label>
-        <label>每周投入（小时）<input type="number" min={0} max={168} value={draft.constraints.hoursPerWeek ?? ''} onChange={e => setConstraint('hoursPerWeek', e.target.value)} /></label>
-        <label>预算（元）<input type="number" min={0} max={1000000} value={draft.constraints.budgetCny ?? ''} onChange={e => setConstraint('budgetCny', e.target.value)} /></label></div>}
       {error && <p role="alert" className="form-error">{errorText(error)}</p>}
-      <div className="form-actions"><button className="ghost-button" type="button" onClick={() => { setDraft(example); setExpanded(true); setError(null); }}>填入实习示例</button>
-        <button className="primary-button" disabled={busy}>{busy ? '正在连接服务，请稍候…' : mode === 'live' ? '生成经验地图 →' : '查看示例地图 →'}</button></div>
-    </form><section className="home-foot"><span>摘要不冒充全文</span><button className="text-link" disabled={busy} onClick={() => void submit(example)}>查看已整理案例 →</button></section></main>;
+      <div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? '正在连接服务，请稍候…' : '生成经验地图 →'}</button></div>
+    </form></main>;
 }
 
 const phases = ['queued', 'retrieving', 'organizing', 'validating'] as const;
@@ -213,9 +205,27 @@ function SourceDrawer({ map, evidence, close }: { map: ExperienceMap; evidence: 
     </div></dialog>;
 }
 function Comparison({ map }: { map: ExperienceMap }) {
-  const labels = [...new Set(['时间', '成本', '投入', ...map.routes.flatMap(r => r.tradeoffs.map(t => t.label))])];
+  const labels = [...new Set([...map.routes.flatMap(r => r.tradeoffs.map(t => t.label))])];
   return <section className="comparison" aria-label="路线对比"><h2>按同一维度比较</h2>{['适合条件', ...labels, '风险'].map(label => <div className="compare-row" key={label}>
     <h3>{label}</h3><div className="compare-values">{map.routes.map(r => <div key={r.routeId}><b>{r.title}</b><p>{label === '适合条件' ? r.fit.join('；') || '资料未说明' : label === '风险' ? r.risks.join('；') || '资料未说明' : r.tradeoffs.find(t => t.label === label)?.value ?? '资料未说明'}</p></div>)}</div></div>)}</section>;
+}
+function mapDisplayTitle(map: ExperienceMap): string {
+  return map.query?.trim() || '知乎问题';
+}
+function mapIsProcessLike(map: ExperienceMap): boolean { return map.presentation?.kind === 'insight'; }
+function stagePaceVisible(map: ExperienceMap, text: string): boolean {
+  return map.presentation?.timing !== 'none' && !mapIsProcessLike(map) && Boolean(text.trim());
+}
+function mapStructureLabel(map: ExperienceMap): string {
+  if (map.presentation?.completeness === 'sources_only') return '已找到资料 · 整理未完成';
+  if (mapIsProcessLike(map)) return '观点与依据';
+  if (map.routes.length > 1) return map.routes.length + ' 条参考路线';
+  return map.differences.length ? '共同主线 · 含关键分歧' : '行动流程';
+}
+function sourceMetrics(source: ExperienceMap['sources'][number]): string {
+  return [['voteUpCount', '赞同'], ['commentCount', '评论']]
+    .flatMap(([key, label]) => typeof source.metrics?.[key] === 'number'
+      ? [source.metrics[key].toLocaleString('zh-CN') + ' ' + label] : []).join(' · ');
 }
 function MapPage() {
   const { mapId = '' } = useParams(); const { map, error } = useMap(mapId); const [params, setParams] = useSearchParams();
@@ -223,22 +233,93 @@ function MapPage() {
   if (error) return <ErrorView error={error} />;
   if (!map) return <Loading />;
   const selected = map.routes.find(r => r.routeId === params.get('routeId')) ?? map.routes[0];
-  return <main id="main" className="page map-page"><div className="map-head"><div><span className="status-pill">{statusLabel(map)}</span><h1>{map.query ?? map.questionUrl ?? '知乎问题经验地图'}</h1><p>{map.overview}</p></div><Link to="/" className="text-link">重新整理</Link></div>
-    <div className="condition-row"><span>本地图条件</span>{map.constraints.background && <b>{map.constraints.background}</b>}{map.constraints.weeks !== null && <b>{map.constraints.weeks} 周</b>}{map.constraints.hoursPerWeek !== null && <b>每周 {map.constraints.hoursPerWeek} 小时</b>}{map.constraints.budgetCny !== null && <b>预算 ¥{map.constraints.budgetCny}</b>}</div><DataNotice map={map} />
-    {!selected ? <section className="route-detail"><h2>暂时没有足够证据形成路线</h2><p>已有来源保留在下方，可以修改条件后重新整理。</p></section> : <>
-      <section className="route-grid">{map.routes.map((r, i) => <button key={r.routeId} className={`route-card ${r === selected ? 'selected' : ''}`} aria-pressed={r === selected} onClick={() => setParams({ routeId: r.routeId }, { replace: true })}>
-        <span className="route-number">路线 {i + 1}</span><h2>{r.title}</h2><p>{r.strategy}</p><div className="route-tags">{r.fit.map(f => <span key={f}>{f}</span>)}</div><span className="route-cta">{r === selected ? '当前路线 ✓' : '查看这条路线 →'}</span></button>)}</section>
-      {map.routes.length > 1 && <button className="ghost-button" aria-expanded={compare} onClick={() => setCompare(!compare)}>{compare ? '收起路线对比' : '比较所有路线'}</button>}
-      {compare && map.routes.length > 1 && <Comparison map={map} />}
-      <section className="route-detail"><div className="section-heading"><div><span className="eyebrow">当前路线</span><h2>{selected.title}</h2></div><span className="source-count">{new Set(selected.evidenceIds).size} 条引用</span></div>
-        <div className="detail-grid"><div className="timeline">{selected.stages.map((stage, i) => <article className="stage-card" key={stage.stageId}><div className="stage-index">{i + 1}</div><div><span className="stage-weeks">{stage.suggestedWeeks}</span><h3>{stage.title}</h3>{stage.tasks.map(task => <div className="task-preview" key={task.taskId}><b>{task.action}</b><span>完成判据：{task.doneWhen}</span><Citations ids={task.evidenceIds} map={map} open={setEvidence} /></div>)}</div></article>)}</div>
-          <aside className="side-panel"><div className="side-block"><span className="eyebrow">关键风险</span><ul>{selected.risks.map(r => <li key={r}>{r}</li>)}</ul></div><div className="side-block"><span className="eyebrow">投入取舍</span>{selected.tradeoffs.length ? selected.tradeoffs.map(t => <div className="tradeoff" key={t.label}><span>{t.label}</span><b>{t.value}</b></div>) : <p>资料未说明</p>}</div>
-            {map.differences.length > 0 && <div className="side-block"><span className="eyebrow">观点差异</span>{map.differences.map(d => <div key={d.title}><p>{d.summary}</p><Citations ids={d.evidenceIds} map={map} open={setEvidence} /></div>)}</div>}</aside></div></section>
+  const insight = mapIsProcessLike(map);
+  const partial = map.presentation?.completeness === 'sources_only';
+  const focus = map.presentation?.focus;
+  const questionId = map.questionUrl?.match(/\/question\/(\d+)/u)?.[1];
+  const originalQuestionUrl = !synthetic(map) && map.inputMode === 'question_url'
+    ? safeSourceUrl(map.questionUrl?.replace(/\/answer\/.*$/, '') ?? '') : null;
+  return <main id="main" className={'page map-page' + (insight ? ' insight-page' : '')}>
+    <div className="map-head"><div>
+      <span className="status-pill">{partial ? '资料已获取 · 待整理' : statusLabel(map)}</span>
+      {questionId && <span className="question-context">#{questionId} · 基于该问题下的回答整理</span>}
+      <h1>{mapDisplayTitle(map)}</h1><p>{map.overview}</p>
+      {originalQuestionUrl && <a className="question-origin" href={originalQuestionUrl} target="_blank" rel="noopener noreferrer">查看原问题 ↗</a>}
+    </div><Link to="/" className="text-link">重新整理</Link></div>
+    {Object.values(map.constraints).some(v => v !== null) && <div className="condition-row"><span>本地图条件</span>
+      {map.constraints.background && <b>{map.constraints.background}</b>}
+      {map.constraints.weeks !== null && <b>{map.constraints.weeks} 周</b>}
+      {map.constraints.hoursPerWeek !== null && <b>每周 {map.constraints.hoursPerWeek} 小时</b>}
+      {map.constraints.budgetCny !== null && <b>预算 ¥{map.constraints.budgetCny}</b>}</div>}
+    <DataNotice map={map} />
+    {focus?.requested && <section className={'focus-review ' + focus.status} aria-label="关注点回应">
+      <h2>你关注的：{focus.requested}</h2><p>{focus.summary}</p>
+      <Citations ids={focus.evidenceIds} map={map} open={setEvidence} />
+    </section>}
+    {selected && <section className="map-summary" aria-label="地图概览"><div className="summary-lead">
+      <span className="eyebrow">{mapStructureLabel(map)}</span><h2>{insight ? '先理解观点，再核对依据' : selected.title}</h2>
+      <p>{selected.strategy}</p></div><div className="summary-stats">
+        {!insight && <div><b>{map.routes.length}</b><span>{map.routes.length === 1 ? '条主流程' : '条参考路线'}</span></div>}
+        <div><b>{map.sources.length}</b><span>个来源摘要</span></div>
+        <div><b>{selected.stages.length}</b><span>{insight ? '个理解维度' : '个行动阶段'}</span></div>
+      </div></section>}
+    {!selected ? <section className="route-detail"><h2>{partial ? '资料已找到，尚未形成可靠整理' : '暂时没有足够证据形成路线'}</h2>
+      <p>可先查阅下方来源，或返回修改后重新整理。</p></section> : <>
+      {map.routes.length > 1 && <section className="route-grid">{map.routes.map((r, i) => <button key={r.routeId}
+        className={'route-card ' + (r === selected ? 'selected' : '')} aria-pressed={r === selected}
+        onClick={() => setParams({ routeId: r.routeId }, { replace: true })}>
+        <span className="route-number">{'路线 ' + (i + 1)}</span><h2>{r.title}</h2><p>{r.strategy}</p>
+        <div className="route-tags">{r.fit.map(f => <span key={f}>{f}</span>)}</div>
+        <div className="route-meta"><span>{r.stages.length} 个阶段</span><span>{new Set(r.evidenceIds).size} 条引用</span></div>
+        <span className="route-cta">{r === selected ? '当前路线 ✓' : '查看这条路线 →'}</span>
+      </button>)}</section>}
+      {map.routes.length > 1 && !insight && <button className="ghost-button" aria-expanded={compare}
+        onClick={() => setCompare(!compare)}>{compare ? '收起路线对比' : '比较所有路线'}</button>}
+      {compare && map.routes.length > 1 && !insight && <Comparison map={map} />}
+      <section className="route-detail"><div className="section-heading"><div><span className="eyebrow">{insight ? '观点梳理' : '当前路线'}</span>
+        <h2>{selected.title}</h2></div><span className="source-count">{new Set(selected.evidenceIds).size} 条引用</span></div>
+        {map.presentation?.timingNote && <p className="timing-note">{map.presentation.timingNote}</p>}
+        <div className="detail-grid"><div className={insight ? 'insight-sections' : 'timeline'}>
+          {selected.stages.map((stage, i) => <article className={insight ? 'insight-card' : 'stage-card'} key={stage.stageId}>
+            {!insight && <div className="stage-index">{i + 1}</div>}<div>
+              {stagePaceVisible(map, stage.suggestedWeeks) && <span className="stage-weeks">{stage.suggestedWeeks}</span>}
+              <h3>{stage.title}</h3>{stage.tasks.map(task => <div className="task-preview" key={task.taskId}>
+                <b>{task.action}</b><span>{insight ? '判断边界：' : '完成判据：'}{task.doneWhen}</span>
+                <Citations ids={task.evidenceIds} map={map} open={setEvidence} />
+              </div>)}
+            </div>
+          </article>)}</div>
+          <aside className="side-panel">
+            {!!selected.fit.length && <div className="side-block"><span className="eyebrow">适用条件</span><ul>{selected.fit.map(f => <li key={f}>{f}</li>)}</ul></div>}
+            {!!selected.risks.length && <div className="side-block"><span className="eyebrow">{insight ? '理解时的提醒' : '关键风险'}</span><ul>{selected.risks.map(r => <li key={r}>{r}</li>)}</ul></div>}
+            {!!selected.tradeoffs.length && <div className="side-block"><span className="eyebrow">{insight ? '需要权衡' : '投入取舍'}</span>
+              {selected.tradeoffs.map(t => <div className="tradeoff" key={t.label}><span>{t.label}</span><b>{t.value}</b></div>)}</div>}
+            {!!map.differences.length && <div className="side-block"><span className="eyebrow">观点差异</span>
+              {map.differences.map(d => <div key={d.title}><h3 className="difference-title">{d.title}</h3><p>{d.summary}</p><Citations ids={d.evidenceIds} map={map} open={setEvidence} /></div>)}</div>}
+          </aside>
+        </div>
+      </section>
     </>}
-    <section className="sources-section"><h2>来源摘要</h2>{map.sources.length ? map.sources.map(s => <article key={s.sourceId}><h3>{s.title}</h3><p>{s.summary}</p><Citations ids={map.evidence.filter(e => e.sourceId === s.sourceId).map(e => e.evidenceId)} map={map} open={setEvidence} /></article>) : <p>没有可展示的来源。</p>}</section>
-    <section className="limitations"><span>使用前请知道</span>{map.limitations.map(l => <p key={l}>{l}</p>)}</section><div className="map-actions"><Link className="ghost-button" to="/">← 返回修改</Link>{selected && <Link className="primary-button" to={`/maps/${encodeURIComponent(mapId)}/plan?routeId=${encodeURIComponent(selected.routeId)}`}>选择这条路线，生成清单 →</Link>}</div>
-    {evidence && <SourceDrawer map={map} evidence={evidence} close={() => setEvidence(null)} />}</main>;
+    <section className="sources-section"><div className="section-heading"><div><span className="eyebrow">可回看的依据</span><h2>来源摘要</h2></div>
+      <span className="source-count">{map.sources.length} 个来源</span></div>
+      {map.sources.map(s => <article key={s.sourceId}><div className="source-row">
+        <span className="source-type">{s.contentType === 'article' ? '文章' : '回答摘要'}</span>
+        {s.authorName && <span>{s.authorName}</span>}{sourceMetrics(s) && <span>{sourceMetrics(s)}</span>}
+      </div><h3>{s.title}</h3><p>{s.summary}</p>
+      <Citations ids={map.evidence.filter(e => e.sourceId === s.sourceId).map(e => e.evidenceId)} map={map} open={setEvidence} />
+      {!synthetic(map) && safeSourceUrl(s.url) && <a className="text-link" href={safeSourceUrl(s.url)!} target="_blank" rel="noopener noreferrer">查看原文 ↗</a>}
+      </article>)}
+    </section>
+    <section className="limitations"><span>使用前请知道</span>{map.limitations.map(l => <p key={l}>{l}</p>)}</section>
+    <div className="map-actions"><Link className="ghost-button" to="/">← 返回修改</Link>
+      {selected && <Link className="primary-button" to={'/maps/' + encodeURIComponent(mapId) + '/plan?routeId=' + encodeURIComponent(selected.routeId)}>
+        {insight ? '查看与导出观点笔记 →' : '选择这条路线，生成清单 →'}
+      </Link>}
+    </div>
+    {evidence && <SourceDrawer map={map} evidence={evidence} close={() => setEvidence(null)} />}
+  </main>;
 }
+
 function PlanContent({ map, route }: { map: ExperienceMap; route: MapRoute }) {
   const [completed, setCompleted] = useState<string[]>([]); const [storageError, setStorageError] = useState(''); const [ready, setReady] = useState(false);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
@@ -254,16 +335,16 @@ function PlanContent({ map, route }: { map: ExperienceMap; route: MapRoute }) {
   }
   function download() {
     const blob = new Blob([markdownPlan(map, route, completed)], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = '知乎经验地图-行动清单.md';
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = mapIsProcessLike(map) ? '知乎经验地图-观点笔记.md' : '知乎经验地图-行动清单.md';
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const total = route.stages.reduce((sum, s) => sum + s.tasks.length, 0);
-  return <main id="main" className="page plan-page"><Link className="text-link" to={`/maps/${encodeURIComponent(map.mapId)}?routeId=${encodeURIComponent(route.routeId)}`}>← 返回路线比较</Link>
-    <div className="plan-head"><span className="status-pill">{route.title}</span><h1>把路线变成今天能开始的事</h1><p>以下为建议安排；勾选进度仅保存在本机。</p><DataNotice map={map} />
-      <p role="status">{completed.length}/{total} 项已完成</p><progress aria-label="清单完成进度" value={completed.length} max={total || 1} /></div>
+  return <main id="main" className="page plan-page"><Link className="text-link" to={`/maps/${encodeURIComponent(map.mapId)}?routeId=${encodeURIComponent(route.routeId)}`}>← 返回经验地图</Link>
+    <div className="plan-head"><span className="status-pill">{route.title}</span><h1>{mapIsProcessLike(map) ? '把观点整理成可回看的内容' : '把路线变成今天能开始的事'}</h1><p>{mapIsProcessLike(map) ? '以下内容按理解和验证顺序排列，不代表固定时间表。' : '以下为建议安排；勾选进度仅保存在本机。'}</p><DataNotice map={map} />
+      {!mapIsProcessLike(map) && <><p role="status">{completed.length}/{total} 项已完成</p><progress aria-label="清单完成进度" value={completed.length} max={total || 1} /></>}</div>
     {storageError && <p className="notice" role="alert">{storageError}</p>}
-    <div className="plan-list">{route.stages.map(s => <section className="plan-stage" key={s.stageId}><span className="stage-weeks">{s.suggestedWeeks}</span><h2>{s.title}</h2>{s.tasks.map(t => <div key={t.taskId}><label className={`plan-task ${completed.includes(t.taskId) ? 'complete' : ''}`}><input disabled={!ready} type="checkbox" checked={completed.includes(t.taskId)} onChange={() => toggle(t.taskId)} /><span><b>{t.action}</b><small>完成判据：{t.doneWhen}</small></span></label><Citations ids={t.evidenceIds} map={map} open={setEvidence} /></div>)}</section>)}</div>
-    <div className="plan-actions"><button className="ghost-button" onClick={download}>导出 Markdown</button><Link className="primary-button" to={`/maps/${encodeURIComponent(map.mapId)}`}>重新选择路线</Link></div>{evidence && <SourceDrawer map={map} evidence={evidence} close={() => setEvidence(null)} />}</main>;
+    <div className="plan-list">{route.stages.map(s => <section className="plan-stage" key={s.stageId}>{stagePaceVisible(map, s.suggestedWeeks) && <span className="stage-weeks">{s.suggestedWeeks}</span>}<h2>{s.title}</h2>{s.tasks.map(t => <div key={t.taskId}>{mapIsProcessLike(map) ? <div className="plan-task"><span><b>{t.action}</b><small>适用边界：{t.doneWhen}</small></span></div> : <label className={`plan-task ${completed.includes(t.taskId) ? 'complete' : ''}`}><input disabled={!ready} type="checkbox" checked={completed.includes(t.taskId)} onChange={() => toggle(t.taskId)} /><span><b>{t.action}</b><small>完成判据：{t.doneWhen}</small></span></label>}<Citations ids={t.evidenceIds} map={map} open={setEvidence} /></div>)}</section>)}</div>
+    <div className="plan-actions"><button className="ghost-button" onClick={download}>导出 Markdown</button><Link className="primary-button" to={`/maps/${encodeURIComponent(map.mapId)}`}>{mapIsProcessLike(map) ? '返回观点梳理' : '重新选择路线'}</Link></div>{evidence && <SourceDrawer map={map} evidence={evidence} close={() => setEvidence(null)} />}</main>;
 }
 function PlanPage() {
   const { mapId = '' } = useParams(); const [params] = useSearchParams(); const { map, error } = useMap(mapId);

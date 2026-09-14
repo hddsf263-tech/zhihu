@@ -8,13 +8,13 @@ test('real backend replay: mount, validation, create, compare, dialog, progress,
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   const requests: string[] = []; page.on('request', r => requests.push(r.url()));
   await page.goto('/'); await expect(page.getByRole('heading', { level: 1 })).toContainText('把零散经验');
-  await page.getByRole('button', { name: '查看示例地图' }).click(); await expect(page.getByRole('alert')).toBeVisible();
-  await page.getByRole('button', { name: '填入实习示例' }).click();
+  await expect(page.getByRole('button', { name: '填入实习示例' })).toHaveCount(0);
   const sent = page.waitForRequest(r => r.method() === 'POST' && r.url().endsWith('/api/v1/maps/jobs'));
-  await page.getByRole('button', { name: '查看示例地图' }).click();
+  await page.getByLabel('你正在考虑什么？').fill('大学生如何准备第一份产品经理实习？');
+  await page.getByRole('button', { name: '生成经验地图' }).click();
   expect((await sent).headers()['idempotency-key']).toBeTruthy(); await expect(page).toHaveURL(new RegExp(mapPath));
   await page.getByRole('button', { name: '比较所有路线' }).click(); await expect(page.getByRole('region', { name: '路线对比' })).toBeVisible();
-  await page.getByRole('button', { name: /路线 2/ }).click(); await expect(page.locator('.section-heading')).toContainText('边做边投递');
+  await page.getByRole('button', { name: /路线 2/ }).click(); await expect(page.locator('.route-detail .section-heading')).toContainText('边做边投递');
   const source = page.getByRole('button', { name: '查看来源 3', exact: true }).first(); await source.click();
   await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByRole('dialog').locator('mark')).toHaveText('尽早投递获取反馈');
   await expect(page.getByRole('dialog').getByRole('link', { name: /查看知乎原文/ })).toHaveCount(0);
@@ -49,7 +49,7 @@ test('live metadata and actual source link are rendered from response, not fixtu
   await expect(page.getByRole('dialog').getByRole('link', { name: '查看知乎原文 ↗' })).toHaveAttribute('href', replayMap.sources[0].url);
 });
 test('network failure and malformed map have visible errors', async ({ page }) => {
-  await page.route('**/api/v1/maps/network', r => r.abort()); await page.goto('/maps/network'); await expect(page.getByRole('alert')).toContainText('连接中断');
+  await page.route('**/api/v1/maps/network', r => r.abort()); await page.goto('/maps/network'); await expect(page.getByRole('alert')).toContainText('中断');
   await page.route('**/api/v1/maps/malformed', r => r.fulfill({ json: { mapId: 'malformed' } })); await page.goto('/maps/malformed'); await expect(page.getByRole('alert')).toContainText('共享契约');
 });
 for (const width of [360, 390, 768, 1440]) {
@@ -63,25 +63,26 @@ for (const width of [360, 390, 768, 1440]) {
   });
 }
 
-test('submission is guarded against repeat clicks and preserves zero budget', async ({ page }) => {
+test('submission prevents repeats and clears obsolete constraints from stored drafts', async ({ page }) => {
   let posts = 0;
   await page.route('**/api/v1/maps/jobs', async route => {
-    posts++; expect(route.request().postDataJSON().constraints.budgetCny).toBe(0);
+    posts++; expect(route.request().postDataJSON().constraints).toEqual({ background: null, weeks: null, hoursPerWeek: null, budgetCny: null });
     await new Promise(resolve => setTimeout(resolve, 200));
     await route.fulfill({ status: 202, json: { jobId: replayJob.jobId, status: 'queued', pollAfterMs: 1500 } });
   });
   await page.goto('/'); await page.getByRole('button', { name: '填入实习示例' }).click();
-  await page.getByLabel('预算（元）').fill('0');
-  const button = page.getByRole('button', { name: '查看示例地图' });
+  await expect(page.getByRole('button', { name: /补充我的条件/ })).toHaveCount(0);
+  await expect(page.getByLabel('预算（元）')).toHaveCount(0);
+  const button = page.getByRole('button', { name: '生成经验地图' });
   await button.evaluate((node: HTMLButtonElement) => { node.click(); node.click(); });
   await expect(page).toHaveURL(new RegExp(mapPath)); expect(posts).toBe(1);
 });
-test('150 second wait boundary stops automatic polling and offers manual recovery', async ({ page }) => {
+test('180 second wait boundary stops automatic polling and offers manual recovery', async ({ page }) => {
   let polls = 0;
   await page.clock.install();
   await page.route('**/api/v1/maps/jobs/waiting', r => { polls++; return r.fulfill({ json: { ...replayJob, status: 'retrieving', mapId: null } }); });
   await page.goto('/jobs/waiting'); await expect(page.getByRole('heading', { name: '把经验线索放到一起' })).toBeVisible();
-  await page.clock.fastForward(151000); await expect(page.getByRole('alert')).toContainText('再次检查状态');
+  await page.clock.fastForward(181000); await expect(page.getByRole('alert')).toContainText('再次检查');
   const count = polls; await page.clock.fastForward(10000); expect(polls).toBe(count);
   await expect(page.getByRole('button', { name: '再次检查状态' })).toBeVisible();
 });
