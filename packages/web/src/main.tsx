@@ -5,6 +5,7 @@ import { CreateMapJobRequestSchema, type CreateMapJobRequest, type ExperienceMap
 import { createHttpClient, createMockClient, resolveMode, errorText, type ClientError } from './api-client.js';
 import { markdownPlan, planKey, readCompleted, safeSourceUrl, statusLabel, synthetic } from './presentation.js';
 import './styles.css';
+import './pixel-world.css';
 
 // Local development stays deterministic; the production container defaults to
 // real server-side Zhihu retrieval unless Render explicitly sets another mode.
@@ -37,6 +38,13 @@ function getDraft(): CreateMapJobRequest {
 function rememberRequest(jobId: string, request: CreateMapJobRequest) {
   try { sessionStorage.setItem(`experience-map:job:${jobId}`, JSON.stringify(request)); } catch { /* Browser can still poll by job ID. */ }
 }
+// Home hero places. The artwork is 16:10 and the hotspot classes below are
+// positioned against it; each place seeds a real, retrievable question.
+const mapPlaces = [
+  { id: 'portfolio', className: 'portfolio', title: '作品村', hint: '先做出可展示的作品', query: '如何做出第一个能拿得出手的作品？', focus: '作品集' },
+  { id: 'feedback', className: 'feedback', title: '投递码头', hint: '尽早拿到真实反馈', query: '第一次投递简历前要准备到什么程度？', focus: '投递反馈' },
+  { id: 'skills', className: 'skills', title: '技能森林', hint: '补齐工具与方法', query: '入门阶段应该先补齐哪些工具和方法？', focus: '技能' },
+];
 function Home() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState(getDraft);
@@ -45,6 +53,19 @@ function Home() {
   const [error, setError] = useState<ClientError | null>(null);
   const pending = useRef(false);
   const attempt = useRef<{ body: string; key: string } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const queryRef = useRef<HTMLTextAreaElement>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
+  useEffect(() => { if (focusRequest > 0) queryRef.current?.focus(); }, [focusRequest]);
+  function revealInput() {
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFocusRequest(count => count + 1);
+  }
+  function startFromPlace(place: typeof mapPlaces[number]) {
+    setDraft(current => ({ ...current, inputMode: 'topic', questionUrl: null, query: place.query, focus: place.focus }));
+    setError(null);
+    revealInput();
+  }
   async function submit(payload: CreateMapJobRequest) {
     if (pending.current) return;
     const parsed = CreateMapJobRequestSchema.safeParse(payload);
@@ -63,15 +84,27 @@ function Home() {
   function setConstraint(key: keyof CreateMapJobRequest['constraints'], value: string) {
     setDraft(current => ({ ...current, constraints: { ...current.constraints, [key]: key === 'background' ? value || null : value === '' ? null : Number(value) } }));
   }
-  return <main id="main" className="page home-page"><section className="hero"><div className="eyebrow">知乎内容的下一种读法</div>
+  return <main id="main" className="page home-page">
+    <section className="pixel-world" aria-label="知乎像素经验地图">
+      <img className="pixel-art" src="/assets/approved-map-ui-clean.png" alt="知乎像素经验地图：作品村、投递码头、技能森林，以及举着路牌的刘看山向导" />
+      <span className="guide-plate" aria-hidden="true" />
+      <img className="guide-gif" src="/assets/liukanshan-guide.gif" alt="刘看山动态向导" />
+      <div className="pixel-hotspots">
+        {mapPlaces.map(place => <button type="button" key={place.id} className={`hotspot ${place.className}`} onClick={() => startFromPlace(place)} aria-label={`${place.title}：${place.hint}`}><span className="sr-only">{place.title}：{place.hint}</span></button>)}
+        <button type="button" className="hotspot guide-hotspot" onClick={revealInput} aria-label="刘看山向导：去输入你的问题"><span className="sr-only">刘看山向导：去输入你的问题</span></button>
+        <button type="button" className="hotspot stamp-hotspot" disabled={busy} onClick={() => void submit(example)} aria-label="证据邮票：打开已整理的实习案例"><span className="sr-only">证据邮票：打开已整理的实习案例</span></button>
+      </div>
+    </section>
+    <p className="pixel-caption">点地图上的地点，小山会把它变成可以直接检索的问题；也可以直接在下面写下你自己的问题。</p>
+    <section className="hero"><div className="eyebrow">知乎内容的下一种读法</div>
     <h1>把零散经验，变成<br /><em>可比较的下一步</em></h1><p className="hero-copy">看清不同建议的前提、分歧与风险，再选择适合自己的行动。</p></section>
-    <form className="input-card" onSubmit={onSubmit} noValidate>
+    <form ref={formRef} className="input-card" onSubmit={onSubmit} noValidate>
       <p className="notice">{modeLabel}。{mode !== 'live' ? '当前只展示固定实习案例，修改输入不会生成新内容。' : '比较不同选择的利弊，生成有来源的行动路线。首次打开可能需要约一分钟唤醒服务。'}</p>
       <div className="mode-tabs" role="group" aria-label="输入方式">
         <button type="button" aria-pressed={draft.inputMode === 'topic'} className={draft.inputMode === 'topic' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'topic', questionUrl: null, query: '' }))}>输入主题</button>
         <button type="button" aria-pressed={draft.inputMode === 'question_url'} className={draft.inputMode === 'question_url' ? 'active' : ''} onClick={() => setDraft(d => ({ ...d, inputMode: 'question_url', query: null, questionUrl: '' }))}>粘贴知乎问题链接</button>
       </div>
-      {draft.inputMode === 'topic' ? <label className="field-label">你正在考虑什么？<textarea maxLength={500} rows={3} value={draft.query ?? ''} onChange={e => setDraft({ ...draft, query: e.target.value })} placeholder="例如：大学生如何准备第一份产品经理实习？" /></label>
+      {draft.inputMode === 'topic' ? <label className="field-label">你正在考虑什么？<textarea ref={queryRef} maxLength={500} rows={3} value={draft.query ?? ''} onChange={e => setDraft({ ...draft, query: e.target.value })} placeholder="例如：大学生如何准备第一份产品经理实习？" /></label>
         : <label className="field-label">知乎问题链接<input type="url" value={draft.questionUrl ?? ''} onChange={e => setDraft({ ...draft, questionUrl: e.target.value })} placeholder="https://www.zhihu.com/question/..." /></label>}
       <label className="field-label">你最想关注什么？<input maxLength={300} value={draft.focus ?? ''} onChange={e => setDraft({ ...draft, focus: e.target.value || null })} placeholder="可选：时间、成本、作品集、风险……" /></label>
       <button type="button" className="constraints-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>补充我的条件 <span>{expanded ? '收起' : '展开'}</span></button>
@@ -245,4 +278,3 @@ function App() {
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing app root');
 createRoot(root).render(<StrictMode><App /></StrictMode>);
-
