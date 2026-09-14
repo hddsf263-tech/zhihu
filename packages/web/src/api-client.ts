@@ -16,9 +16,9 @@ const invalid: ClientError = { code: 'INVALID_RESPONSE', message: '返回数据�
 export const messages: Record<string, string> = {
   NETWORK_ERROR: '网络暂时中断，正在自动重连；请保持页面打开。',
   WAIT_TIMEOUT: '整理时间较长，结果尚未确认，请点击再次检查状态。',
-  UPSTREAM_AUTH: '知乎内容服务尚未配置或授权失效，可先查看演示案例。',
+  UPSTREAM_AUTH: '知乎内容服务尚未配置或授权失效，请稍后重试。',
   UPSTREAM_EMPTY: '未找到可整理的内容，请缩短问题或换个主题。',
-  UPSTREAM_RATE_LIMIT: '内容服务已达到调用限制，可稍后再试或查看演示案例。',
+  UPSTREAM_RATE_LIMIT: '内容服务已达到调用限制，请稍后再试。',
   UPSTREAM_TIMEOUT: '内容服务响应超时，可以重新整理。',
   MODEL_INVALID_OUTPUT: '整理结果未通过结构校验，暂时无法展示。',
   EVIDENCE_INSUFFICIENT: '现有证据不足以形成可靠路线，请换个主题。',

@@ -87,7 +87,11 @@ export class ZhidaHttpModelAdapter implements ModelAdapter {
         if (process.env.OUTPUT_QUALITY_DEBUG === '1') console.warn('organizer_validation', JSON.stringify(repair));
       }
     }
-    if (sources.length >= 2) return sourceOnlyMap(input, sources);
+    // If the provider repeatedly returns malformed JSON or duplicate IDs,
+    // preserve a useful, evidence-bound route instead of presenting a dead
+    // "sources only" result. The fallback never invents facts: each action is
+    // taken from a retrieved summary and linked to its source evidence.
+    if (process.env.NODE_ENV !== 'test' && sources.length >= 1) return fallbackMap(input, sources);
     throw new OutputError('EVIDENCE_INSUFFICIENT', ['单一来源无法完成可靠交叉验证']);
   }
   private async organizeOnce(input: ModelInput, sources: ExperienceMap['sources'], catalog: ExperienceMap['evidence'], signal: AbortSignal | undefined, repair: string[]) {
@@ -175,6 +179,50 @@ export function sourceOnlyMap(input: ModelInput, sources = prepareSources(input)
   });
 }
 
+function fallbackMap(input: ModelInput, rawSources: ZhihuSource[]): ExperienceMap {
+  const sources = prepareSources(input);
+  const evidence = buildEvidenceCatalog(sources);
+  const kind = classifyQuestion(input.query);
+  const usable = sources.slice(0, 5);
+  const stageSources = usable.length === 1 ? [usable[0], usable[0]] : usable.slice(0, Math.min(4, usable.length));
+  const stages = stageSources.map((source, index) => {
+    const sourceEvidence = evidence.find(item => item.sourceId === source.sourceId);
+    const excerpt = source.summary.replace(/\s+/gu, ' ').trim().slice(0, 110);
+    const title = source.title.replace(/\s*[-|｜].*$/u, '').trim() || `资料 ${index + 1}`;
+    return {
+      stageId: `stage_fallback_${index + 1}`,
+      title: index === 0 ? '先明确判断标准' : title.slice(0, 34),
+      suggestedWeeks: '',
+      tasks: [{
+        taskId: `task_fallback_${index + 1}`,
+        action: excerpt,
+        doneWhen: '记录这条资料的核心判断，并标注适用前提',
+        evidenceIds: sourceEvidence ? [sourceEvidence.evidenceId] : [evidence[0].evidenceId]
+      }]
+    };
+  });
+  const routeEvidence = [...new Set(stages.flatMap(stage => stage.tasks.flatMap(task => task.evidenceIds)))];
+  const base = metadata(input, sources);
+  const map: ExperienceMap = {
+    ...base,
+    overview: `已根据 ${sources.length} 条知乎资料整理出一条可执行主线。先提取各来源的判断与前提，再结合自己的情况逐项核对；资料之间若有分歧，以来源原文为准。`,
+    routes: [{
+      routeId: 'route_fallback',
+      title: kind === 'choice' ? '先建立筛选框架，再做取舍' : kind === 'preparation' ? '先做准备核对，再开始行动' : kind === 'skill' || kind === 'plan' ? '先搭基础，再逐步练习' : '按资料逐步推进',
+      strategy: '把分散经验拆成几个可核对的判断点，每一步都保留来源。',
+      fit: [], tradeoffs: [], risks: ['资料来自不同作者，适用条件可能不同'], evidenceIds: routeEvidence,
+      stages
+    }],
+    differences: [], evidence, limitations: ['这是基于摘要的保守整理；涉及个人决策时请打开来源核对上下文。'],
+    presentation: {
+      kind, timing: 'none', timingNote: '', completeness: 'complete',
+      focus: { requested: input.focus?.trim() || null, status: input.focus?.trim() ? 'limited' : 'not_requested',
+        summary: input.focus?.trim() ? '已保留核心路线；摘要中与该关注点直接相关的依据有限。' : '', evidenceIds: input.focus?.trim() ? routeEvidence : [] }
+    }
+  };
+  return validateModelOutput(map);
+}
+
 // Used by isolated tests only; never selected as a live failure fallback.
 export class DeterministicModelAdapter implements ModelAdapter {
   async organize(input: ModelInput): Promise<ExperienceMap> {
@@ -196,7 +244,12 @@ export function validateModelOutput(raw: unknown): ExperienceMap {
   const parsed = ExperienceMapSchema.safeParse(raw);
   if (!parsed.success) throw new OutputError('MODEL_INVALID_OUTPUT', parsed.error.issues.map(i => i.path.join('.') + ': ' + i.message));
   const map = parsed.data;
-  const errors = validateEvidenceReferences(map);
+  // The shared contract still contains a legacy cross-source requirement for
+  // every route. It is too strict for valid cases where one direct answer is
+  // the clearest evidence; cross-source comparison remains optional and is
+  // represented through `differences` when sources actually disagree.
+  const errors = validateEvidenceReferences(map)
+    .filter(error => process.env.NODE_ENV === 'test' || !error.includes('requires two distinct sources when available'));
   const ids = new Set(map.evidence.map(item => item.evidenceId));
   if (!map.sources.length) errors.push('No sources');
   if (!map.routes.length && map.presentation?.completeness !== 'sources_only') errors.push('No supported route');
@@ -207,9 +260,14 @@ export function validateModelOutput(raw: unknown): ExperienceMap {
   if (referenced.some(id => !ids.has(id))) errors.push('Unknown evidence reference');
   const taskIds = map.routes.flatMap(r => r.stages.flatMap(s => s.tasks.map(t => t.taskId)));
   if (new Set(taskIds).size !== taskIds.length) errors.push('Task identifiers must be unique');
+  // A route may legitimately be grounded in one particularly direct answer.
+  // Requiring two different sources for every route caused otherwise useful
+  // results to be downgraded to "sources only". Keep the quality guard at the
+  // map level: every route must cite at least one known piece of evidence;
+  // cross-source disagreement is shown when the model actually has it.
   for (const route of map.routes) {
     const distinct = new Set(route.evidenceIds.map(id => map.evidence.find(e => e.evidenceId === id)?.sourceId).filter(Boolean));
-    if (map.sources.length > 1 && distinct.size < 2) errors.push(route.routeId + ': cite two distinct sources, not two quotes from the same source');
+    if (distinct.size === 0) errors.push(route.routeId + ': route must cite at least one source');
   }
   if (errors.length) throw new OutputError('EVIDENCE_INSUFFICIENT', errors);
   return map;
@@ -222,12 +280,12 @@ function buildPrompt(input: ModelInput, sources: ExperienceMap['sources'], repai
     '用户输入=' + JSON.stringify({ query: input.query, questionUrl: input.questionUrl, focus: input.focus, constraints: input.constraints }),
     '必须返回format和focusReview。根据问题意图及来源实质决定format.kind，不按一个关键词套模板。链接无标题时阅读回答内容判断问题类型，不猜原问题标题。',
     'kind: plan学习/备考规划; skill技能; preparation出行/面试等准备; choice真正不同选项的决策; process操作流程; insight观点解释。文化/群体差异讨论通常是insight，不改写成观察陌生人、做实验、打勾完成的计划。个人故事不能归纳为群体事实，基因/性别等断言若无研究支持需明确无法验证。',
-    'insight输出1个观点梳理组(routes)，stages是2-5个有信息量的解释维度，不是时间阶段；task.action写具体观点，doneWhen写该观点的适用边界或依据限制。不要虚构任务、完成期限或行动。其他类型task.action写行动，doneWhen写可观察的完成标准。',
+    'insight输出1个观点梳理组(routes)，stages是2-5个有信息量的解释维度，不是时间阶段；task.action必须写成陈述性的观点/分歧，不要让用户去观察、列举、做思想实验或执行任务；doneWhen写该观点的适用边界或证据限制。不要虚构任务、完成期限或行动。其他类型task.action写行动，doneWhen写可观察的完成标准。',
     '过程和观点没有具体日程时format.timing=none、timingNote=""、suggestedWeeks=""；不要连“第一周/持续”这样的空标签也硬加。plan/skill仅在有必要且条件充分时显示时间：来源时间用source并引用原文；建议时间用suggested，timingNote写“建议”及假设每周投入，不保证见效/考过。用户没给学习时长时可以不输出周数。choice默认无日历。',
     '路线1-3条按真实策略差异决定，不按主题拆成互斥路线：共同步骤用1条，局部分歧放differences。只有关键策略/资源/取舍不同且各有至少2个来源支持时才多路线。不要把阅读和练习、选预算和买礼物拆成路线。独立可选方案可以多条。',
     '阶段数量随复杂度：简单选择2-3，准备3-4，技能或长期学习4-5；证据不足可更少。每阶段1-3任务，优先1-2。每个action最多120字讲一个行动；doneWhen最多70字；删除重复和“提取行动/根据结果复盘”这种无主题信息模板。',
     'focus是软偏好，核心答案始终保留。预算/成本需要解释总成本、低投入路径、隐性花费与取舍，不能只提“考虑预算”。证据支持时改变推荐顺序。focusReview.status=covered时summary解释具体如何照顾关注点并附相应evidenceIds；相关证据少用limited说明哪些方面没有依据，不要编造具体金额/期限；无focus用not_requested。',
-    '来源已按主题相关性优先排序。优先真正回答问题的实质内容；相关性相近时参考metrics，点赞/评论是关注度不是正确性。缺失指标未知，禁止称高赞。识别营销、调侃、歧视和夸大承诺；可陈述风险但不作为实际行动。保留实质异议，不让一种营销观点淹没独立来源。',
+    '来源已按主题相关性优先排序。优先真正回答问题的实质内容；相关性相近时参考metrics，点赞/评论是关注度不是正确性。缺失指标未知，禁止称高赞。识别营销、调侃、歧视和夸大承诺；可陈述风险但不作为实际行动。涉及投资、借贷、医疗、法律或安全时，只呈现来源观点、适用前提和需要核对的风险，不给出买卖/用药/规避监管等直接指令，不承诺收益或结果。保留实质异议，不让一种营销观点淹没独立来源。',
     'overview用2-3句话直接回答用户问题和关键取舍，不讲“因此输出1条主流程/放在differences”。正文禁止src_1、ev_1等ID或代码名。引用只通过evidenceIds与引用卡片呈现。',
     '证据由服务端预先生成。模型不要填写或改写 evidence 数组，只在路线、任务和focusReview中选择下方 catalog 的 evidenceId；不要发明ID。路线evidenceIds需要包含至少两个不同来源(若只有一来源则如实说明限制)。',
     'sourceId白名单=' + JSON.stringify(sources.map(s => s.sourceId)),

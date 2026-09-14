@@ -7,13 +7,14 @@ import { markdownPlan, planKey, readCompleted, safeSourceUrl, statusLabel, synth
 import './styles.css';
 import './pixel-world.css';
 
-// Local development stays deterministic; the production container defaults to
-// real server-side Zhihu retrieval unless Render explicitly sets another mode.
-const mode = resolveMode(import.meta.env.VITE_DATA_MODE, import.meta.env.PROD);
+// User-facing development and production both use the live server-side Zhihu
+// retrieval path by default. Replay remains available only when explicitly
+// requested through VITE_DATA_MODE for automated tests or fixture inspection.
+const mode = resolveMode(import.meta.env.VITE_DATA_MODE, true);
 const api = mode === 'mock' ? createMockClient() : createHttpClient();
-const example: CreateMapJobRequest = {
-  inputMode: 'topic', query: '大学生如何准备第一份产品经理实习？', questionUrl: null, focus: null,
-  constraints: { background: '零实习经历', weeks: 8, hoursPerWeek: 10, budgetCny: 500 }, dataMode: 'replay'
+const defaultDraft: CreateMapJobRequest = {
+  inputMode: 'topic', query: '', questionUrl: null, focus: null,
+  constraints: { background: null, weeks: null, hoursPerWeek: null, budgetCny: null }, dataMode: 'live'
 };
 const blankError = (message: string): ClientError => ({ code: 'INVALID_RESPONSE', message, retryable: false });
 
@@ -31,18 +32,48 @@ function ErrorView({ error, retry }: { error: ClientError; retry?: () => void })
     <div className="form-actions">{retry && <button className="ghost-button" onClick={retry}>再次检查状态</button>}<Link className="primary-button" to="/">返回修改</Link></div></main>;
 }
 function getDraft(): CreateMapJobRequest {
-  try { const parsed = CreateMapJobRequestSchema.safeParse(JSON.parse(sessionStorage.getItem('experience-map:draft') ?? 'null')); if (parsed.success) return parsed.data; } catch { /* Storage is optional. */ }
-  return { ...example, query: '', constraints: { background: null, weeks: null, hoursPerWeek: null, budgetCny: null } };
+  try {
+    const parsed = CreateMapJobRequestSchema.safeParse(JSON.parse(sessionStorage.getItem('experience-map:draft') ?? 'null'));
+    // Do not resurrect the old demo request from a previous local build.
+    if (parsed.success && parsed.data.dataMode === 'live') return parsed.data;
+  } catch { /* Storage is optional. */ }
+  return defaultDraft;
 }
 function rememberRequest(jobId: string, request: CreateMapJobRequest) {
   try { sessionStorage.setItem(`experience-map:job:${jobId}`, JSON.stringify(request)); } catch { /* Browser can still poll by job ID. */ }
 }
-// Place prompts and artwork are preserved from main e5b4b98.
+// Preset directions are intentionally broad entry points; users can edit them before submitting.
 const mapPlaces = [
-  { id: 'portfolio', className: 'portfolio', title: '作品村', hint: '先做出可展示的作品', query: '如何做出第一个能拿得出手的作品？', focus: '作品集' },
-  { id: 'feedback', className: 'feedback', title: '投递码头', hint: '尽早拿到真实反馈', query: '第一次投递简历前要准备到什么程度？', focus: '投递反馈' },
-  { id: 'skills', className: 'skills', title: '技能森林', hint: '补齐工具与方法', query: '入门阶段应该先补齐哪些工具和方法？', focus: '技能' },
+  { id: 'learn', className: 'learn', title: '学习', hint: '从建立学习路径开始', query: '怎么从零学习单片机？', focus: '学习顺序' },
+  { id: 'choose', className: 'choose', title: '选择', hint: '从比较不同选择开始', query: '怎么选择专业？', focus: '就业与长期发展' },
+  { id: 'prepare', className: 'prepare', title: '准备', hint: '从做好前置准备开始', query: '怎么准备第一次长途自驾？', focus: '安全与成本' },
 ];
+
+function CityMap({ onPlaceClick, onGuideClick, disabled = false }: { onPlaceClick: (place: typeof mapPlaces[number]) => void; onGuideClick: () => void; disabled?: boolean }) {
+  return <section className="city-map-world" aria-label="知乎经验地图">
+    <svg className="city-map-art" viewBox="0 0 1000 625" role="img" aria-label="蓝白城市道路经验地图">
+      <defs>
+        <linearGradient id="city-map-bg" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#e6f5fa" /><stop offset="1" stopColor="#c8e2ee" /></linearGradient>
+        <pattern id="city-map-blocks" width="138" height="108" patternUnits="userSpaceOnUse"><rect x="12" y="12" width="104" height="73" rx="12" fill="#f7fcff" stroke="#a4c4db" strokeWidth="2" /><path d="M29 34h56M29 49h42M29 64h49" stroke="#c7dce8" strokeWidth="6" strokeLinecap="round" /></pattern>
+      </defs>
+      <rect width="1000" height="625" fill="url(#city-map-bg)" /><rect width="1000" height="625" fill="url(#city-map-blocks)" opacity=".86" />
+      <g fill="none" stroke="#fff" strokeLinecap="round"><path d="M-35 112L210 172 396 120 610 196 1035 122M96-30L170 186 126 660M456-30L440 135 486 656M858-30L790 168 880 660" strokeWidth="66" /></g>
+      <g fill="none" stroke="#9ab3ba" strokeWidth="2"><path d="M-35 112L210 172 396 120 610 196 1035 122M96-30L170 186 126 660M456-30L440 135 486 656M858-30L790 168 880 660" /></g>
+      <path className="city-selected-road-shadow" d="M-30 500C148 405 231 404 330 343S472 244 585 286s184 87 440-80" />
+      <path className="city-selected-road" d="M-30 500C148 405 231 404 330 343S472 244 585 286s184 87 440-80" />
+      <path className="city-selected-road-line" d="M-30 500C148 405 231 404 330 343S472 244 585 286s184 87 440-80" />
+      <path className="city-route" d="M500 322C414 283 338 232 247 185M500 322c100-26 168-79 250-151M500 322c93 21 153 86 221 174" />
+      <circle cx="500" cy="322" r="28" fill="#fff" stroke="#1769c8" strokeWidth="4" /><path d="M500 304v36M482 322h36" stroke="#1769c8" strokeWidth="3" />
+      <text x="58" y="62" fill="#1a6595" fontSize="14" letterSpacing="4">ZH EXPERIENCE MAP</text><text x="879" y="64" fill="#417c9e" fontSize="12" letterSpacing="3">N ↑</text>
+    </svg>
+    <span className="city-map-center-ring" aria-hidden="true" />
+    <img className="city-map-mascot" src="/assets/liukanshan-guide.gif" alt="刘看山" onClick={onGuideClick} />
+    <div className="city-map-buildings">
+      {mapPlaces.map(place => <button type="button" key={place.id} className={`city-map-building ${place.className}`} disabled={disabled} onClick={() => onPlaceClick(place)} aria-label={`${place.title}：${place.hint}`}><span>{place.title}</span></button>)}
+    </div>
+  </section>;
+}
+
 function Home() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState(getDraft);
@@ -62,7 +93,7 @@ function Home() {
     setFocusRequest(count => count + 1);
   }
   function startFromPlace(place: typeof mapPlaces[number]) {
-    setDraft(current => ({ ...current, inputMode: 'topic', questionUrl: null, query: place.query, focus: place.focus }));
+    setDraft(current => ({ ...current, inputMode: 'topic', questionUrl: null, query: place.query, focus: null }));
     setError(null);
     revealInput();
   }
@@ -83,17 +114,7 @@ function Home() {
   }
   function onSubmit(event: FormEvent) { event.preventDefault(); void submit({ ...draft, dataMode: mode === 'live' ? 'live' : 'replay' }); }
 
-  return <main id="main" className="page home-page"><section className="pixel-world" aria-label="知乎像素经验地图">
-      <img className="pixel-art" src="/assets/approved-map-ui-clean.png" alt="知乎像素经验地图：作品村、投递码头、技能森林，以及举着路牌的刘看山向导" />
-      <span className="guide-plate" aria-hidden="true" />
-      <img className="guide-gif" src="/assets/liukanshan-guide.gif" alt="刘看山动态向导" />
-      <div className="pixel-hotspots">
-        {mapPlaces.map(place => <button type="button" key={place.id} className={`hotspot ${place.className}`} disabled={busy} onClick={() => startFromPlace(place)} aria-label={`${place.title}：${place.hint}`}><span className="sr-only">{place.title}：{place.hint}</span></button>)}
-        <button type="button" className="hotspot guide-hotspot" onClick={revealInput} aria-label="刘看山向导：去输入你的问题"><span className="sr-only">刘看山向导：去输入你的问题</span></button>
-        <button type="button" className="hotspot stamp-hotspot" disabled={busy} onClick={() => void submit(example)} aria-label="证据邮票：打开已整理的实习案例"><span className="sr-only">证据邮票：打开已整理的实习案例</span></button>
-      </div>
-    </section>
-    <p className="pixel-caption">点地图上的地点，小山会把它变成可以直接检索的问题；也可以直接在下面写下你自己的问题。</p>
+  return <main id="main" className="page home-page"><CityMap onPlaceClick={startFromPlace} onGuideClick={revealInput} disabled={busy} />
     <section className="hero"><div className="eyebrow">知乎内容的下一种读法</div>
     <h1>把零散经验，变成<br /><em>可比较的下一步</em></h1><p className="hero-copy">看清不同建议的前提、分歧与风险，再选择适合自己的行动。</p>
     <div className="how-it-works" aria-label="产品工作方式"><div><span>01</span><b>提出一个具体问题</b><small>主题或知乎问题链接都可以</small></div><i aria-hidden="true">→</i><div><span>02</span><b>对照不同经验路径</b><small>按条件、投入和风险比较</small></div><i aria-hidden="true">→</i><div><span>03</span><b>带走一份行动清单</b><small>每一步都有来源可以回看</small></div></div></section>
@@ -160,7 +181,8 @@ function JobPage() {
   if (error) return <><ErrorView error={error} retry={job?.status !== 'failed' && job?.status !== 'expired' ? () => setRevision(r => r + 1) : undefined} />
     {job?.status === 'failed' && error.retryable && <div className="retry-action"><button className="primary-button" disabled={retrying} onClick={() => void retryJob()}>重新整理</button></div>}</>;
   const index = phases.findIndex(p => p === (job?.status ?? 'queued'));
-  return <main id="main" className="page state-page"><div className="state-icon pulse" aria-hidden="true">✦</div><h1>把经验线索放到一起</h1>
+  return <main id="main" className="page state-page loading-page"><div className="state-icon pulse" aria-hidden="true">✦</div><h1>把经验线索放到一起</h1>
+    <div className="route-loading-map" aria-label="经验整理路线"><svg viewBox="0 0 1000 600" role="img" aria-label="经验整理路线地图"><defs><pattern id="loading-map-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#fff" strokeOpacity=".34" /></pattern><linearGradient id="loading-map-bg" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#e8f6fa" /><stop offset="1" stopColor="#d2eaf2" /></linearGradient></defs><rect width="1000" height="600" fill="url(#loading-map-bg)" /><rect width="1000" height="600" fill="url(#loading-map-grid)" /><g fill="none" stroke="#fff" strokeLinecap="round" opacity=".8"><path d="M-80 100L180 184 390 98 600 176 1080 72M100-40L168 190 112 650M465-40L438 134 484 650M850-40L790 170 890 650" strokeWidth="34" /></g><g fill="none" stroke="#94b6c9" strokeWidth="2"><path d="M-80 100L180 184 390 98 600 176 1080 72M100-40L168 190 112 650M465-40L438 134 484 650M850-40L790 170 890 650" /></g><path className="loading-route-under" d="M150 150C256 208 310 330 430 337S604 212 676 226 790 400 900 414" /><path className="loading-route" d="M150 150C256 208 310 330 430 337S604 212 676 226 790 400 900 414" /><path className="loading-route-dash" d="M150 150C256 208 310 330 430 337S604 212 676 226 790 400 900 414" /><text x="44" y="53" fill="#287198" fontSize="14" letterSpacing="4">ZH EXPERIENCE MAP</text><text x="910" y="54" fill="#4e819b" fontSize="12">N</text></svg><span className={`loading-destination d1 ${index > 0 ? 'done' : index === 0 ? 'current' : ''}`} /><span className={`loading-destination d2 ${index > 1 ? 'done' : index === 1 ? 'current' : ''}`} /><span className={`loading-destination d3 ${index > 2 ? 'done' : index === 2 ? 'current' : ''}`} /><span className={`loading-destination d4 ${index > 3 ? 'done' : index === 3 ? 'current' : ''}`} /><span className="loading-label l1">收到问题</span><span className="loading-label l2">搜索知乎</span><span className="loading-label l3">整理经验</span><span className="loading-label l4">核对来源</span><img className="loading-mascot" src="/assets/liukanshan-guide.gif" alt="刘看山" /></div>
     <p role="status">{job?.message ?? '正在检查任务状态'}</p><div className="progress-list">{phases.map((phase, i) => <div key={phase} className={`progress-item ${i === index ? 'current' : i < index ? 'done' : ''}`} aria-current={i === index ? 'step' : undefined}><span>{i < index ? '✓' : i + 1}</span><b>{phaseLabels[i]}</b></div>)}</div>
     <p className="drawer-note">阶段以服务端实际状态为准；返回修改仅停止本页等待。</p><Link to="/" className="text-link">← 返回修改</Link></main>;
 }
